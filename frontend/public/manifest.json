@@ -1,0 +1,21 @@
+{
+  "short_name": "Latin BaKikar",
+  "name": "Latin BaKikar - Collaborative Music Streaming",
+  "description": "Stream music together with friends from your Google Drive",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#3b82f6",
+  "background_color": "#ffffff",
+  "orientation": "portrait",
+  "categories": ["music", "entertainment", "social"],
+  "lang": "en",
+  "scope": "/",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"]
+}
