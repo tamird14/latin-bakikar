@@ -1,5 +1,20 @@
 {
   "buildCommand": "cd frontend && npm install && npm run build",
   "outputDirectory": "frontend/build",
-  "installCommand": "npm install"
+  "installCommand": "npm install",
+  "functions": {
+    "backend/api/index.js": {
+      "runtime": "@vercel/node@3.0.7"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/backend/api"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
 } 
