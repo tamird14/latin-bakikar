@@ -1,22 +1,5 @@
 {
   "buildCommand": "cd frontend && npm install && npm run build",
   "outputDirectory": "frontend/build",
-  "installCommand": "npm install",
-  "functions": {
-    "api/sessions.js": {
-      "runtime": "nodejs18.x"
-    },
-    "api/drive/files.js": {
-      "runtime": "nodejs18.x"
-    },
-    "api/drive/stream/[fileId].js": {
-      "runtime": "nodejs18.x"
-    }
-  },
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
-  ]
+  "installCommand": "npm install"
 } 
