@@ -33,6 +33,11 @@ module.exports = async function handler(req, res) {
         folderId = req.query.folderId;
       }
       
+      // Convert "root" to null so it uses the shared folder
+      if (folderId === 'root') {
+        folderId = null;
+      }
+      
       console.log('📁 Getting files for folder:', folderId || 'shared folder');
       
       // Initialize Google Drive service

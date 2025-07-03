@@ -78,12 +78,16 @@ class GoogleDriveService {
 
   async listFiles(folderId = null, pageToken = null) {
     try {
+      console.log('📁 listFiles called with folderId:', folderId);
+      
       if (!this.isAuthenticated) {
         await this.initializeForSharedFolder();
       }
 
       // Use shared folder if no specific folder requested
       const targetFolderId = folderId || this.sharedFolderId;
+      console.log('📁 Using targetFolderId:', targetFolderId);
+      console.log('📁 Shared folder ID from config:', this.sharedFolderId);
       
       const response = await this.drive.files.list({
         q: `'${targetFolderId}' in parents and trashed=false`,
