@@ -88,8 +88,7 @@ const Session = () => {
     socket.on('queue-updated', (newQueue) => {
       console.log('📡 Socket: queue-updated received', {
         queueLength: newQueue.length,
-        firstSong: newQueue[0]?.name,
-        previousQueueLength: queue.length
+        firstSong: newQueue[0]?.name
       });
       setQueue(newQueue);
     });

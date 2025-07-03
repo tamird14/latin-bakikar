@@ -104,12 +104,13 @@ const PersistentAudioPlayer = ({
     } else if (!isPlaying && audioRef.current.paused) {
       console.log('✅ Audio already paused, no action needed');
     }
-  }, [isPlaying, isReady, currentSrc]); // Re-added isPlaying but kept it minimal
+  }, [isPlaying, isReady, currentSrc, currentSong, currentTime]);
 
   // Handle song changes (only when song ID actually changes)
   const [lastLoadedSongId, setLastLoadedSongId] = useState(null);
   const loadingRef = useRef(false); // Prevent concurrent loading
   
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!currentSong || !audioRef.current) {
       if (currentSrc) {
