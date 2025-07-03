@@ -17,7 +17,9 @@ module.exports = async function handler(req, res) {
 
   if (req.method === 'GET') {
     try {
-      const fileId = req.query.fileId;
+      // Extract fileId from URL path: /api/drive/stream/[fileId]
+      const urlParts = req.url.split('/');
+      const fileId = urlParts[urlParts.length - 1];
       console.log('🎵 Getting stream URL for file:', fileId);
       
       if (!fileId) {
