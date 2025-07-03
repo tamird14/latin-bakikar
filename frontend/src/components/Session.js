@@ -12,7 +12,7 @@ const Session = () => {
   const { sessionId } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { socket, isConnected, sessionData } = useSocket();
+  const { socket, sessionData } = useSocket();
   
   const [session, setSession] = useState(null);
   const [isHost, setIsHost] = useState(searchParams.get('host') === 'true'); // eslint-disable-line no-unused-vars
