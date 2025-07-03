@@ -12,7 +12,7 @@ const Session = () => {
   const { sessionId } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { socket, isConnected } = useSocket();
+  const { socket, isConnected, sessionData } = useSocket();
   
   const [session, setSession] = useState(null);
   const [isHost, setIsHost] = useState(searchParams.get('host') === 'true'); // eslint-disable-line no-unused-vars
@@ -50,6 +50,11 @@ const Session = () => {
         setIsPlaying(sessionData.isPlaying);
         setClientCount(sessionData.clientCount);
         setLoading(false);
+        
+        // Set session ID for socket sync
+        if (socket) {
+          socket.setSessionId(sessionId);
+        }
       } catch (err) {
         setError('Session not found');
         setLoading(false);
@@ -57,58 +62,123 @@ const Session = () => {
     };
 
     loadSession();
-  }, [sessionId]);
+  }, [sessionId, socket]);
 
-  // Socket connection disabled for serverless deployment
+  // Socket connection and sync
   useEffect(() => {
-    console.log('Socket.io features disabled for serverless deployment');
-    // Real-time features temporarily disabled
-    // Session will work in basic mode with API calls only
-  }, [socket, isConnected, sessionId, isHost]);
+    if (socket && sessionId) {
+      console.log('Setting up session sync for:', sessionId);
+      
+      // Join session
+      socket.emit('joinSession', { sessionId });
+      
+      // Listen for sync events
+      socket.on('queueUpdated', (newQueue) => {
+        console.log('🔄 Queue updated from sync:', newQueue);
+        setQueue(newQueue || []);
+      });
+      
+      socket.on('songChanged', (newSong) => {
+        console.log('🔄 Song changed from sync:', newSong);
+        setCurrentSong(newSong);
+      });
+      
+      socket.on('playbackStateChanged', (newPlayingState) => {
+        console.log('🔄 Playback state changed from sync:', newPlayingState);
+        setIsPlaying(newPlayingState);
+      });
+      
+      // Cleanup
+      return () => {
+        socket.emit('leaveSession', { sessionId });
+        socket.off('queueUpdated');
+        socket.off('songChanged');
+        socket.off('playbackStateChanged');
+      };
+    }
+  }, [socket, sessionId]);
+
+  // Update client count from session data
+  useEffect(() => {
+    if (sessionData && sessionData.clientCount !== undefined) {
+      setClientCount(sessionData.clientCount);
+    }
+  }, [sessionData]);
 
   const handleAddToQueue = (song) => {
-    // Local mode - no socket connection needed
-    console.log('🎵 Adding to queue (local mode):', song);
-    setQueue(prev => [...prev, song]);
+    console.log('🎵 Adding to queue:', song);
+    const newQueue = [...queue, song];
+    setQueue(newQueue);
+    
+    // Sync to other devices
+    if (socket) {
+      socket.emit('updateQueue', newQueue);
+    }
   };
 
   const handleReorderQueue = (newQueue) => {
-    // Local mode - no socket connection needed  
-    console.log('🔄 Reordering queue (local mode):', newQueue);
+    console.log('🔄 Reordering queue:', newQueue);
     if (isHost) {
       setQueue(newQueue);
+      
+      // Sync to other devices
+      if (socket) {
+        socket.emit('updateQueue', newQueue);
+      }
     }
   };
 
   const handlePlayPause = (song = null) => {
-    // Local mode - no socket connection needed
-    console.log('⏯️ Play/pause (local mode):', song);
+    console.log('⏯️ Play/pause:', song);
     if (isHost) {
       const songToPlay = song || currentSong;
-      setIsPlaying(!isPlaying);
+      const newPlayingState = !isPlaying;
+      setIsPlaying(newPlayingState);
+      
       if (songToPlay && songToPlay !== currentSong) {
         setCurrentSong(songToPlay);
+        // Sync current song
+        if (socket) {
+          socket.emit('updateCurrentSong', songToPlay);
+        }
+      }
+      
+      // Sync playback state
+      if (socket) {
+        socket.emit('updatePlaybackState', newPlayingState);
       }
     }
   };
 
   const handleNextSong = () => {
-    // Local mode - no socket connection needed
-    console.log('⏭️ Next song (local mode)');
+    console.log('⏭️ Next song');
     if (isHost && queue.length > 0) {
       const nextSong = queue[0];
+      const newQueue = queue.slice(1);
+      
       setCurrentSong(nextSong);
-      setQueue(prev => prev.slice(1));
+      setQueue(newQueue);
       setIsPlaying(true);
+      
+      // Sync to other devices
+      if (socket) {
+        socket.emit('updateCurrentSong', nextSong);
+        socket.emit('updateQueue', newQueue);
+        socket.emit('updatePlaybackState', true);
+      }
     }
   };
 
   const handleStop = () => {
-    // Local mode - no socket connection needed
-    console.log('⏹️ Stop (local mode)');
+    console.log('⏹️ Stop');
     if (isHost) {
       setIsPlaying(false);
       setCurrentTime(0);
+      
+      // Sync to other devices
+      if (socket) {
+        socket.emit('updatePlaybackState', false);
+      }
     }
   };
 

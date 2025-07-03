@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 // import io from 'socket.io-client'; // Disabled for serverless deployment
 
 const SocketContext = createContext();
@@ -13,27 +13,155 @@ export const useSocket = () => {
 
 export const SocketProvider = ({ children }) => {
   const [socket, setSocket] = useState(null);
-  const [isConnected, setIsConnected] = useState(false);
-
+  const [isConnected, setIsConnected] = useState(true); // Always connected for polling
+  const [sessionData, setSessionData] = useState(null);
+  const [clientId] = useState(() => `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+  
+  const pollInterval = useRef(null);
+  const currentSessionId = useRef(null);
+  const lastUpdate = useRef(0);
+  
+  // API functions for session management
+  const updateSession = useCallback(async (sessionId, updates) => {
+    try {
+      const response = await fetch(`/api/sessions/${sessionId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setSessionData(data);
+        lastUpdate.current = data.lastUpdate;
+        return data;
+      }
+    } catch (error) {
+      console.error('Failed to update session:', error);
+    }
+  }, []);
+  
+  const pollSession = useCallback(async (sessionId) => {
+    try {
+      const response = await fetch(`/api/sessions/${sessionId}`);
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Only update if the data is newer than what we have
+        if (data.lastUpdate > lastUpdate.current) {
+          setSessionData(data);
+          lastUpdate.current = data.lastUpdate;
+          
+          // Emit events for compatibility with existing code
+          if (mockSocket.current) {
+            if (data.currentSong !== sessionData?.currentSong) {
+              mockSocket.current._emit('songChanged', data.currentSong);
+            }
+            if (data.queue?.length !== sessionData?.queue?.length) {
+              mockSocket.current._emit('queueUpdated', data.queue);
+            }
+            if (data.isPlaying !== sessionData?.isPlaying) {
+              mockSocket.current._emit('playbackStateChanged', data.isPlaying);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to poll session:', error);
+    }
+  }, [sessionData]);
+  
+  const mockSocket = useRef(null);
+  
   useEffect(() => {
-    // Temporarily disable Socket.io for serverless deployment
-    console.log('Socket.io disabled for serverless deployment');
-    
-    // Mock socket for compatibility
-    const mockSocket = {
-      emit: (event, data) => console.log('Mock socket emit:', event, data),
-      on: (event, callback) => console.log('Mock socket on:', event),
-      off: (event) => console.log('Mock socket off:', event),
-      connected: false
+    // Create a mock socket that uses our session API
+    const socket = {
+      emit: (event, data) => {
+        console.log('Session sync emit:', event, data);
+        
+        const sessionId = currentSessionId.current;
+        if (!sessionId) return;
+        
+        switch (event) {
+          case 'joinSession':
+            updateSession(sessionId, { action: 'join', clientId });
+            // Start polling
+            if (pollInterval.current) clearInterval(pollInterval.current);
+            pollInterval.current = setInterval(() => pollSession(sessionId), 2000);
+            break;
+            
+          case 'leaveSession':
+            updateSession(sessionId, { action: 'leave', clientId });
+            // Stop polling
+            if (pollInterval.current) {
+              clearInterval(pollInterval.current);
+              pollInterval.current = null;
+            }
+            break;
+            
+          case 'updateQueue':
+            updateSession(sessionId, { queue: data });
+            break;
+            
+          case 'updateCurrentSong':
+            updateSession(sessionId, { currentSong: data });
+            break;
+            
+          case 'updatePlaybackState':
+            updateSession(sessionId, { isPlaying: data });
+            break;
+            
+          default:
+            console.log('Unhandled socket event:', event, data);
+        }
+      },
+      
+      on: (event, callback) => {
+        console.log('Session sync on:', event);
+        socket._listeners = socket._listeners || {};
+        socket._listeners[event] = callback;
+      },
+      
+      off: (event) => {
+        console.log('Session sync off:', event);
+        if (socket._listeners) {
+          delete socket._listeners[event];
+        }
+      },
+      
+      // Internal method to emit events to listeners
+      _emit: (event, data) => {
+        if (socket._listeners && socket._listeners[event]) {
+          socket._listeners[event](data);
+        }
+      },
+      
+      connected: true,
+      
+      // Add session management methods
+      setSessionId: (sessionId) => {
+        currentSessionId.current = sessionId;
+      },
+      
+      getSessionData: () => sessionData
     };
     
-    setSocket(mockSocket);
-    setIsConnected(false); // Keep disconnected for now
-  }, []);
+    mockSocket.current = socket;
+    setSocket(socket);
+    setIsConnected(true);
+    
+    // Cleanup on unmount
+    return () => {
+      if (pollInterval.current) {
+        clearInterval(pollInterval.current);
+      }
+    };
+  }, [updateSession, pollSession, clientId, sessionData]);
 
   const value = {
     socket,
-    isConnected
+    isConnected,
+    sessionData
   };
 
   return (
