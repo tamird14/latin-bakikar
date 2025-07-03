@@ -18,9 +18,13 @@ module.exports = function handler(req, res) {
       const urlParts = req.url.split('/');
       let folderId = 'root';
       
-      // Check if folder ID is in URL path
-      if (urlParts.length > 3 && urlParts[3] && urlParts[3] !== '') {
-        folderId = urlParts[3];
+      // Check if folder ID is in URL path (/api/drive/files/folderId)
+      if (urlParts.length > 4 && urlParts[4] && urlParts[4] !== '') {
+        folderId = urlParts[4];
+      }
+      // Also check query parameter for backward compatibility
+      if (req.query && req.query.folderId) {
+        folderId = req.query.folderId;
       }
       
       console.log('📁 Getting files for folder:', folderId);
