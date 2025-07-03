@@ -1,5 +1,7 @@
 // Google Drive stream API endpoint
-module.exports = function handler(req, res) {
+const GoogleDriveService = require('../../googleDriveService');
+
+module.exports = async function handler(req, res) {
   console.log('🔥 Drive Stream API called:', req.method, req.url);
   console.log('🔥 Query params:', req.query);
   
@@ -14,22 +16,33 @@ module.exports = function handler(req, res) {
   }
 
   if (req.method === 'GET') {
-    const fileId = req.query.fileId;
-    console.log('🎵 Getting stream URL for file:', fileId);
-    
-    if (!fileId) {
-      return res.status(400).json({ error: 'File ID is required' });
+    try {
+      const fileId = req.query.fileId;
+      console.log('🎵 Getting stream URL for file:', fileId);
+      
+      if (!fileId) {
+        return res.status(400).json({ error: 'File ID is required' });
+      }
+      
+      // Initialize Google Drive service
+      const driveService = new GoogleDriveService();
+      
+      // Get real stream data from Google Drive
+      const streamData = await driveService.getFileStreamUrl(fileId);
+      
+      // Return the streaming URL for the client
+      console.log('✅ Returning stream data for:', fileId);
+      res.json({
+        url: `https://drive.google.com/uc?id=${fileId}&export=download`,
+        fileId: fileId,
+        name: streamData.name,
+        mimeType: streamData.mimeType,
+        size: streamData.size
+      });
+    } catch (error) {
+      console.error('❌ Error getting stream URL:', error);
+      res.status(500).json({ error: 'Failed to get stream URL', details: error.message });
     }
-    
-    // Return a mock stream URL for testing
-    // In production, this would return actual Google Drive streaming URLs
-    const streamUrl = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
-    
-    console.log('✅ Returning stream URL:', streamUrl);
-    res.json({
-      url: streamUrl,
-      fileId: fileId
-    });
   } else {
     res.status(405).json({ error: 'Method not allowed' });
   }

@@ -1,5 +1,7 @@
 // Google Drive files API endpoint
-module.exports = function handler(req, res) {
+const GoogleDriveService = require('../googleDriveService');
+
+module.exports = async function handler(req, res) {
   console.log('🔥 Drive Files API called:', req.method, req.url);
   
   // Enable CORS
@@ -16,7 +18,7 @@ module.exports = function handler(req, res) {
     try {
       // Extract folder ID from URL path if present
       const urlParts = req.url.split('/');
-      let folderId = 'root';
+      let folderId = null; // Use null to default to shared folder
       
       console.log('🔍 URL parts:', urlParts);
       console.log('🔍 Full URL:', req.url);
@@ -31,85 +33,21 @@ module.exports = function handler(req, res) {
         folderId = req.query.folderId;
       }
       
-      console.log('📁 Getting files for folder:', folderId);
+      console.log('📁 Getting files for folder:', folderId || 'shared folder');
       
-      // Mock file listing that mimics Google Drive structure
-      let mockData;
+      // Initialize Google Drive service
+      const driveService = new GoogleDriveService();
       
-      if (folderId === 'root') {
-        mockData = {
-          folders: [
-            { id: 'music', name: 'Music', type: 'folder', mimeType: 'application/vnd.google-apps.folder' },
-            { id: 'albums', name: 'Albums', type: 'folder', mimeType: 'application/vnd.google-apps.folder' },
-            { id: 'playlists', name: 'Playlists', type: 'folder', mimeType: 'application/vnd.google-apps.folder' }
-          ],
-          files: [
-            {
-              id: 'root-song-1',
-              name: 'Welcome Song.mp3',
-              type: 'file',
-              size: '5242880',
-              mimeType: 'audio/mpeg',
-              extension: '.mp3',
-              modifiedTime: '2023-01-01T00:00:00.000Z'
-            }
-          ]
-        };
-      } else if (folderId === 'music') {
-        mockData = {
-          folders: [
-            { id: 'rock', name: 'Rock', type: 'folder', mimeType: 'application/vnd.google-apps.folder' },
-            { id: 'pop', name: 'Pop', type: 'folder', mimeType: 'application/vnd.google-apps.folder' },
-            { id: 'jazz', name: 'Jazz', type: 'folder', mimeType: 'application/vnd.google-apps.folder' }
-          ],
-          files: [
-            {
-              id: 'music-song-1',
-              name: 'Great Song.mp3',
-              type: 'file',
-              size: '7340032',
-              mimeType: 'audio/mpeg',
-              extension: '.mp3',
-              modifiedTime: '2023-02-15T00:00:00.000Z'
-            },
-            {
-              id: 'music-song-2',
-              name: 'Another Hit.mp3',
-              type: 'file',
-              size: '6291456',
-              mimeType: 'audio/mpeg',
-              extension: '.mp3',
-              modifiedTime: '2023-03-20T00:00:00.000Z'
-            }
-          ]
-        };
-             } else {
-         // Default for other folders
-         mockData = {
-           folders: [
-             { id: 'subfolder1', name: `Subfolder 1`, type: 'folder', mimeType: 'application/vnd.google-apps.folder' }
-           ],
-           files: [
-             {
-               id: `${folderId}-song-1`,
-               name: `Song from ${folderId}.mp3`,
-               type: 'file',
-               size: '4194304',
-               mimeType: 'audio/mpeg',
-               extension: '.mp3',
-               modifiedTime: '2023-01-15T00:00:00.000Z'
-             }
-           ]
-         };
-       }
-
+      // Get real files from Google Drive
+      const result = await driveService.listFiles(folderId);
+      
       // Combine folders and files into a single array like the original API
-      const allFiles = [...mockData.folders, ...mockData.files];
+      const allFiles = [...result.folders, ...result.files];
 
-      console.log('✅ Returning files:', { folders: mockData.folders.length, files: mockData.files.length });
+      console.log('✅ Returning files:', { folders: result.folders.length, files: result.files.length });
       res.json({
         files: allFiles,
-        nextPageToken: null
+        nextPageToken: result.nextPageToken
       });
     } catch (error) {
       console.error('❌ Error listing files:', error);

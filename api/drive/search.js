@@ -1,5 +1,7 @@
 // Google Drive search API endpoint
-module.exports = function handler(req, res) {
+const GoogleDriveService = require('../googleDriveService');
+
+module.exports = async function handler(req, res) {
   console.log('🔥 Drive Search API called:', req.method, req.url);
   console.log('🔥 Query params:', req.query);
   
@@ -16,36 +18,20 @@ module.exports = function handler(req, res) {
   if (req.method === 'GET') {
     try {
       const { q: query, folderId } = req.query;
-      console.log('🔍 Searching for:', query, 'in folder:', folderId);
+      console.log('🔍 Searching for:', query, 'in folder:', folderId || 'shared folder');
       
-      if (!query) {
+      if (!query || query.trim() === '') {
         return res.status(400).json({ error: 'Search query is required' });
       }
       
-      // Mock search results for now - we'll replace this with real Google Drive API
-      const mockResults = [
-        {
-          id: 'search-result-1',
-          name: `${query} - Artist 1.mp3`,
-          type: 'file',
-          size: '5242880',
-          mimeType: 'audio/mpeg',
-          extension: '.mp3',
-          parents: [folderId || 'root']
-        },
-        {
-          id: 'search-result-2', 
-          name: `Best of ${query}.mp3`,
-          type: 'file',
-          size: '7340032',
-          mimeType: 'audio/mpeg',
-          extension: '.mp3',
-          parents: [folderId || 'root']
-        }
-      ];
+      // Initialize Google Drive service
+      const driveService = new GoogleDriveService();
       
-      console.log('✅ Returning search results:', mockResults.length);
-      res.json({ files: mockResults });
+      // Get real search results from Google Drive
+      const searchResults = await driveService.searchMusicFiles(query, folderId);
+      
+      console.log('✅ Returning search results:', searchResults.length);
+      res.json({ files: searchResults });
     } catch (error) {
       console.error('❌ Error searching files:', error);
       res.status(500).json({ error: 'Failed to search files', details: error.message });

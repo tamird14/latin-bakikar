@@ -1,5 +1,7 @@
 // Google Drive folder path API endpoint
-module.exports = function handler(req, res) {
+const GoogleDriveService = require('../../googleDriveService');
+
+module.exports = async function handler(req, res) {
   console.log('🔥 Drive Path API called:', req.method, req.url);
   console.log('🔥 Query params:', req.query);
   
@@ -22,34 +24,14 @@ module.exports = function handler(req, res) {
         return res.status(400).json({ error: 'Folder ID is required' });
       }
       
-      // Mock folder path - we'll replace this with real Google Drive API
-      let mockPath;
+      // Initialize Google Drive service
+      const driveService = new GoogleDriveService();
       
-      if (folderId === 'root') {
-        mockPath = [
-          { id: 'root', name: 'My Drive' }
-        ];
-      } else if (folderId === 'music') {
-        mockPath = [
-          { id: 'root', name: 'My Drive' },
-          { id: 'music', name: 'Music' }
-        ];
-      } else if (folderId === 'albums') {
-        mockPath = [
-          { id: 'root', name: 'My Drive' },
-          { id: 'music', name: 'Music' },
-          { id: 'albums', name: 'Albums' }
-        ];
-      } else {
-        // Default path for any other folder
-        mockPath = [
-          { id: 'root', name: 'My Drive' },
-          { id: folderId, name: `Folder ${folderId}` }
-        ];
-      }
+      // Get real folder path from Google Drive
+      const folderPath = await driveService.getFolderPath(folderId);
       
-      console.log('✅ Returning folder path:', mockPath);
-      res.json({ path: mockPath });
+      console.log('✅ Returning folder path:', folderPath);
+      res.json({ path: folderPath });
     } catch (error) {
       console.error('❌ Error getting folder path:', error);
       res.status(500).json({ error: 'Failed to get folder path', details: error.message });
