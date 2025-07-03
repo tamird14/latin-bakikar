@@ -8,17 +8,29 @@ class GoogleDriveService {
     this.musicFileExtensions = ['.mp3', '.wav', '.flac', '.m4a', '.ogg', '.wma', '.aac'];
     this.isAuthenticated = false;
     this.sharedFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID || 'root';
+    
+    console.log('🔧 GoogleDriveService constructor');
+    console.log('🔧 GOOGLE_DRIVE_FOLDER_ID:', this.sharedFolderId);
+    console.log('🔧 Environment variables available:', Object.keys(process.env).filter(key => key.startsWith('GOOGLE')));
   }
 
   async authenticate() {
     try {
+      console.log('🔑 Starting authentication...');
+      
       // Get service account from environment variable
       const serviceAccountString = process.env.GOOGLE_SERVICE_ACCOUNT;
+      console.log('🔑 Service account env var exists:', !!serviceAccountString);
+      console.log('🔑 Service account length:', serviceAccountString?.length);
+      
       if (!serviceAccountString) {
+        console.log('❌ GOOGLE_SERVICE_ACCOUNT environment variable not set');
         throw new Error('GOOGLE_SERVICE_ACCOUNT environment variable not set');
       }
 
+      console.log('🔑 Parsing service account JSON...');
       const serviceAccount = JSON.parse(serviceAccountString);
+      console.log('🔑 Service account parsed successfully, project_id:', serviceAccount.project_id);
       
       // Create auth client from service account
       this.auth = new google.auth.GoogleAuth({
@@ -214,15 +226,27 @@ class GoogleDriveService {
 
   async getFileStreamUrl(fileId) {
     try {
+      console.log('🎵 GoogleDriveService.getFileStreamUrl called with fileId:', fileId);
+      console.log('🎵 Current authentication status:', this.isAuthenticated);
+      
       if (!this.isAuthenticated) {
-        await this.initializeForSharedFolder();
+        console.log('🎵 Not authenticated, initializing...');
+        const authSuccess = await this.initializeForSharedFolder();
+        console.log('🎵 Authentication result:', authSuccess);
+        if (!authSuccess) {
+          throw new Error('Failed to authenticate with Google Drive');
+        }
       }
 
+      console.log('🎵 Getting file metadata for fileId:', fileId);
+      
       // Get file metadata
       const fileResponse = await this.drive.files.get({
         fileId: fileId,
         fields: 'id, name, mimeType, size'
       });
+      
+      console.log('🎵 File metadata retrieved:', fileResponse.data);
 
       // For audio files, we need to use the webContentLink or generate a direct download URL
       // Since we can't stream directly due to CORS, we return the file ID for client-side handling

@@ -20,9 +20,15 @@ module.exports = async function handler(req, res) {
       // Extract fileId from URL path: /api/drive/stream/[fileId]
       const urlParts = req.url.split('/');
       const fileId = urlParts[urlParts.length - 1];
-      console.log('🎵 Getting stream URL for file:', fileId);
       
-      if (!fileId) {
+      console.log('🎵 Full URL:', req.url);
+      console.log('🎵 URL parts:', urlParts);
+      console.log('🎵 Extracted fileId:', fileId);
+      console.log('🎵 FileId type:', typeof fileId);
+      console.log('🎵 FileId length:', fileId?.length);
+      
+      if (!fileId || fileId.trim() === '') {
+        console.log('❌ No fileId found in URL');
         return res.status(400).json({ error: 'File ID is required' });
       }
       
