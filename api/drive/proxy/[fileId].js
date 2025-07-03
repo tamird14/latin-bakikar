@@ -39,35 +39,48 @@ module.exports = async function handler(req, res) {
       const file = fileResponse.data;
       console.log('🎵 File metadata:', file);
       
-      // Get the file content stream from Google Drive
-      const streamResponse = await driveService.drive.files.get({
-        fileId: fileId,
-        alt: 'media'
-      }, {
+      // Handle range requests for audio scrubbing
+      const range = req.headers.range;
+      console.log('🎵 Range request:', range);
+      
+      let streamOptions = {
         responseType: 'stream'
-      });
+      };
       
       // Set proper headers for audio streaming
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Content-Type', file.mimeType || 'audio/mpeg');
       res.setHeader('Accept-Ranges', 'bytes');
       
-      if (file.size) {
-        res.setHeader('Content-Length', file.size);
-      }
-      
-      // Handle range requests for audio scrubbing
-      const range = req.headers.range;
       if (range && file.size) {
+        // Parse range header
         const parts = range.replace(/bytes=/, "").split("-");
         const start = parseInt(parts[0], 10);
         const end = parts[1] ? parseInt(parts[1], 10) : parseInt(file.size) - 1;
         const chunksize = (end - start) + 1;
         
+        console.log(`🎵 Range request: ${start}-${end}/${file.size} (${chunksize} bytes)`);
+        
+        // Pass range to Google Drive
+        streamOptions.headers = {
+          'Range': `bytes=${start}-${end}`
+        };
+        
         res.setHeader('Content-Range', `bytes ${start}-${end}/${file.size}`);
         res.setHeader('Content-Length', chunksize);
         res.status(206); // Partial Content
+      } else {
+        // No range request, return full file
+        if (file.size) {
+          res.setHeader('Content-Length', file.size);
+        }
       }
+      
+      // Get the file content stream from Google Drive with range support
+      const streamResponse = await driveService.drive.files.get({
+        fileId: fileId,
+        alt: 'media'
+      }, streamOptions);
       
       console.log('🎵 Streaming file:', file.name);
       
