@@ -4,6 +4,14 @@
   "installCommand": "npm install",
   "rewrites": [
     {
+      "source": "/api/sessions/(.*)",
+      "destination": "/api/sessions"
+    },
+    {
+      "source": "/api/drive/(.*)",
+      "destination": "/api/drive"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
