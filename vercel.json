@@ -6,6 +6,34 @@
     {
       "source": "/api/sessions/(.*)",
       "destination": "/api/sessions"
+    },
+    {
+      "source": "/api/drive/files/(.*)",
+      "destination": "/api/drive/files"
+    },
+    {
+      "source": "/api/drive/search",
+      "destination": "/api/drive/search"
+    },
+    {
+      "source": "/api/drive/path/(.*)",
+      "destination": "/api/drive/path/[folderId]"
+    },
+    {
+      "source": "/api/drive/stream/(.*)",
+      "destination": "/api/drive/stream/[fileId]"
+    },
+    {
+      "source": "/api/drive/auth/init",
+      "destination": "/api/drive/auth/init"
+    },
+    {
+      "source": "/api/drive/auth/callback",
+      "destination": "/api/drive/auth/callback"
+    },
+    {
+      "source": "/api/drive/auth/token",
+      "destination": "/api/drive/auth/token"
     }
   ]
 } 
