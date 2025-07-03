@@ -181,7 +181,10 @@ const MusicPlayer = ({
       {/* Host/Guest Info */}
       {!isHost && (
         <div className="mt-6 p-3 bg-gray-800 rounded-lg text-center">
-          <p className="text-sm text-gray-400">
+          <p className="text-sm text-gray-400 mb-1">
+            🎧 You're listening to the host's music
+          </p>
+          <p className="text-xs text-gray-500">
             Only the host can control playback
           </p>
         </div>

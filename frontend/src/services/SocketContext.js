@@ -16,8 +16,17 @@ export const SocketProvider = ({ children }) => {
   const [isConnected, setIsConnected] = useState(true); // Always connected for polling
   const [sessionData, setSessionData] = useState(null);
   const [clientId] = useState(() => {
+    // Try to get existing client ID from sessionStorage first
+    const existingId = sessionStorage.getItem('latin_bakikar_client_id');
+    if (existingId) {
+      console.log('🔄 Reusing existing client ID:', existingId);
+      return existingId;
+    }
+    
+    // Generate new client ID and store it
     const id = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    console.log('🆔 Generated client ID:', id);
+    sessionStorage.setItem('latin_bakikar_client_id', id);
+    console.log('🆔 Generated new client ID:', id);
     return id;
   });
   
@@ -173,6 +182,8 @@ export const SocketProvider = ({ children }) => {
       const sessionId = currentSessionId.current;
       if (sessionId && clientId) {
         console.log('🚪 Page unloading, cleaning up client:', clientId);
+        // Clear the client ID from sessionStorage
+        sessionStorage.removeItem('latin_bakikar_client_id');
         // Send synchronous request to clean up the client
         navigator.sendBeacon(`/api/sessions/${sessionId}`, JSON.stringify({ action: 'leave', clientId }));
       }

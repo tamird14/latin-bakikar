@@ -4,8 +4,8 @@ const sessions = new Map();
 // Store client connections for each session with timestamps
 const sessionClients = new Map();
 
-// Client heartbeat timeout (if no activity for 30 seconds, remove client)
-const CLIENT_TIMEOUT = 30000;
+// Client heartbeat timeout (if no activity for 10 seconds, remove client)
+const CLIENT_TIMEOUT = 10000;
 
 // Simple ID generator (replacing uuid)
 function generateSessionId() {
@@ -18,23 +18,26 @@ function cleanupStaleClients() {
   
   for (const [sessionId, clients] of sessionClients) {
     const activeClients = new Map();
+    let removedCount = 0;
     
     for (const [clientId, timestamp] of clients) {
       if (now - timestamp < CLIENT_TIMEOUT) {
         activeClients.set(clientId, timestamp);
       } else {
         console.log('🕐 Removing stale client:', clientId, 'from session:', sessionId);
+        removedCount++;
       }
     }
     
-    if (activeClients.size !== clients.size) {
+    if (removedCount > 0) {
       sessionClients.set(sessionId, activeClients);
+      console.log(`🧹 Cleaned up ${removedCount} stale clients from session ${sessionId}. Active: ${activeClients.size}`);
     }
   }
 }
 
-// Run cleanup every 10 seconds
-setInterval(cleanupStaleClients, 10000);
+// Run cleanup every 3 seconds
+setInterval(cleanupStaleClients, 3000);
 
 module.exports = function handler(req, res) {
   console.log('🔥 API called:', req.method, req.url);
