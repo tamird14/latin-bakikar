@@ -18,8 +18,12 @@ module.exports = function handler(req, res) {
       const urlParts = req.url.split('/');
       let folderId = 'root';
       
+      console.log('🔍 URL parts:', urlParts);
+      console.log('🔍 Full URL:', req.url);
+      
       // Check if folder ID is in URL path (/api/drive/files/folderId)
-      if (urlParts.length > 4 && urlParts[4] && urlParts[4] !== '') {
+      // URL structure: ['', 'api', 'drive', 'files', 'folderId']
+      if (urlParts.length >= 5 && urlParts[4] && urlParts[4] !== '') {
         folderId = urlParts[4];
       }
       // Also check query parameter for backward compatibility
@@ -79,23 +83,25 @@ module.exports = function handler(req, res) {
             }
           ]
         };
-      } else {
-        // Default for other folders
-        mockData = {
-          folders: [],
-          files: [
-            {
-              id: `${folderId}-song-1`,
-              name: `Song from ${folderId}.mp3`,
-              type: 'file',
-              size: '4194304',
-              mimeType: 'audio/mpeg',
-              extension: '.mp3',
-              modifiedTime: '2023-01-15T00:00:00.000Z'
-            }
-          ]
-        };
-      }
+             } else {
+         // Default for other folders
+         mockData = {
+           folders: [
+             { id: 'subfolder1', name: `Subfolder 1`, type: 'folder', mimeType: 'application/vnd.google-apps.folder' }
+           ],
+           files: [
+             {
+               id: `${folderId}-song-1`,
+               name: `Song from ${folderId}.mp3`,
+               type: 'file',
+               size: '4194304',
+               mimeType: 'audio/mpeg',
+               extension: '.mp3',
+               modifiedTime: '2023-01-15T00:00:00.000Z'
+             }
+           ]
+         };
+       }
 
       // Combine folders and files into a single array like the original API
       const allFiles = [...mockData.folders, ...mockData.files];
