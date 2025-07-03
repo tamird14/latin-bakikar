@@ -136,77 +136,51 @@ class GoogleDriveService {
 
   async searchMusicFiles(query, folderId = null) {
     try {
+      console.log('🔍 searchMusicFiles called with query:', query, 'folderId:', folderId);
+      
       if (!this.isAuthenticated) {
-        await this.initializeForSharedFolder();
+        console.log('🔍 Not authenticated, initializing...');
+        const authResult = await this.initializeForSharedFolder();
+        console.log('🔍 Auth result:', authResult);
+        if (!authResult) {
+          throw new Error('Failed to authenticate with Google Drive');
+        }
       }
 
       const targetFolderId = folderId || this.sharedFolderId;
+      console.log('🔍 Using target folder:', targetFolderId);
       
-      // Try multiple search strategies for better results
-      let musicFiles = [];
+      // Use simplified approach - just get all files and filter client-side
+      // This is more reliable than Google Drive's search which can be finicky
+      console.log('🔍 Getting all files and filtering client-side...');
       
-      // Strategy 1: Direct Google Drive search with 'contains'
-      try {
-        const searchQuery = `'${targetFolderId}' in parents and trashed=false and name contains '${query}'`;
-        console.log('🔍 Google Drive search query (contains):', searchQuery);
-        
-        const response = await this.drive.files.list({
-          q: searchQuery,
-          fields: 'files(id, name, mimeType, size, modifiedTime)',
-          pageSize: 50,
-          orderBy: 'name'
-        });
-        
-        console.log('🔍 Google Drive API response (contains):', response.data.files?.length || 0, 'files');
-        
-        const allFiles = response.data.files || [];
-        musicFiles = allFiles.filter(file => 
-          file.mimeType !== 'application/vnd.google-apps.folder' && 
-          this.isMusicFile(file.name)
-        );
-        
-        console.log('🔍 Music files from contains search:', musicFiles.length);
-      } catch (searchError) {
-        console.log('🔍 Contains search failed:', searchError.message);
-      }
+      const allFilesResponse = await this.drive.files.list({
+        q: `'${targetFolderId}' in parents and trashed=false`,
+        fields: 'files(id, name, mimeType, size, modifiedTime)',
+        pageSize: 100,
+        orderBy: 'name'
+      });
       
-      // Strategy 2: If no results, fall back to listing all files and filtering client-side
-      if (musicFiles.length === 0) {
-        console.log('🔍 No results from Google Drive search, trying client-side filtering...');
-        
-        try {
-          const allFilesResponse = await this.drive.files.list({
-            q: `'${targetFolderId}' in parents and trashed=false`,
-            fields: 'files(id, name, mimeType, size, modifiedTime)',
-            pageSize: 100,
-            orderBy: 'name'
-          });
-          
-          console.log('🔍 Total files in folder:', allFilesResponse.data.files?.length || 0);
-          
-          const allFiles = allFilesResponse.data.files || [];
-          const allMusicFiles = allFiles.filter(file => 
-            file.mimeType !== 'application/vnd.google-apps.folder' && 
-            this.isMusicFile(file.name)
-          );
-          
-          console.log('🔍 Total music files in folder:', allMusicFiles.length);
-          
-          // Client-side filtering with case-insensitive partial match
-          const queryLower = query.toLowerCase();
-          musicFiles = allMusicFiles.filter(file => 
-            file.name.toLowerCase().includes(queryLower)
-          );
-          
-          console.log('🔍 Music files matching query after client filtering:', musicFiles.length);
-          
-          if (musicFiles.length > 0) {
-            console.log('🔍 Sample matches:', musicFiles.slice(0, 3).map(f => f.name));
-          }
-          
-        } catch (fallbackError) {
-          console.error('🔍 Fallback search also failed:', fallbackError.message);
-        }
+      console.log('🔍 Total files retrieved:', allFilesResponse.data.files?.length || 0);
+      
+      const allFiles = allFilesResponse.data.files || [];
+      const allMusicFiles = allFiles.filter(file => 
+        file.mimeType !== 'application/vnd.google-apps.folder' && 
+        this.isMusicFile(file.name)
+      );
+      
+      console.log('🔍 Total music files:', allMusicFiles.length);
+      
+      // Client-side filtering with case-insensitive partial match
+      const queryLower = query.toLowerCase();
+      const musicFiles = allMusicFiles.filter(file => 
+        file.name.toLowerCase().includes(queryLower)
+      );
+      
+      console.log('🔍 Music files matching query:', musicFiles.length);
+      
+      if (musicFiles.length > 0) {
+        console.log('🔍 Sample matches:', musicFiles.slice(0, 3).map(f => f.name));
       }
 
       return musicFiles.map(file => ({
@@ -220,6 +194,8 @@ class GoogleDriveService {
       }));
     } catch (error) {
       console.error('❌ Error searching files:', error);
+      console.error('❌ Error details:', error.message);
+      console.error('❌ Error stack:', error.stack);
       throw error;
     }
   }
