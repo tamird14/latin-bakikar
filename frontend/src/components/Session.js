@@ -60,6 +60,7 @@ const Session = () => {
   }, [sessionId, socket]);
 
   // Socket connection and sync - only run once per session
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (socket && sessionId) {
       console.log('Setting up session sync for:', sessionId);
@@ -94,7 +95,7 @@ const Session = () => {
         socket.off('playbackStateChanged');
       };
     }
-  }, [sessionId]); // Only depend on sessionId, not socket to prevent infinite loops // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sessionId]); // Only depend on sessionId, not socket to prevent infinite loops
 
   // Update client count from session data
   useEffect(() => {
