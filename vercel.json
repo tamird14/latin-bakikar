@@ -38,6 +38,10 @@
     {
       "source": "/api/drive/auth/token",
       "destination": "/api/drive/auth/token"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 } 
