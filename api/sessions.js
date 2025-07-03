@@ -20,6 +20,36 @@ module.exports = function handler(req, res) {
     return;
   }
 
+  // Check if this is a request for a specific session ID
+  const urlParts = req.url.split('/');
+  const isSessionIdRequest = urlParts.length > 3 && urlParts[3] && urlParts[3] !== '';
+  
+  if (req.method === 'GET' && isSessionIdRequest) {
+    // Handle GET /api/sessions/{sessionId}
+    try {
+      const sessionId = urlParts[3];
+      console.log('🔍 GET request for session:', sessionId);
+      
+      // For demo purposes, return a mock session for any ID
+      const mockSession = {
+        id: sessionId,
+        name: `Demo Session ${sessionId}`,
+        currentSong: null,
+        queue: [],
+        isPlaying: false,
+        clientCount: 1
+      };
+      
+      console.log('✅ Returning mock session:', mockSession.id);
+      res.json(mockSession);
+      return;
+    } catch (error) {
+      console.error('❌ Error getting session:', error);
+      res.status(500).json({ error: 'Failed to get session', details: error.message });
+      return;
+    }
+  }
+
   if (req.method === 'POST') {
     try {
       // Create new session
@@ -47,9 +77,8 @@ module.exports = function handler(req, res) {
       res.status(500).json({ error: 'Failed to create session', details: error.message });
     }
   } else if (req.method === 'GET') {
-    // This endpoint only handles session listing, not individual session retrieval
-    // Individual sessions are handled by /api/sessions/[sessionId].js
-    res.status(404).json({ error: 'Use /api/sessions/{sessionId} to get a specific session' });
+    // This is a GET request to /api/sessions (without session ID)
+    res.status(400).json({ error: 'Session ID is required in URL path: /api/sessions/{sessionId}' });
   } else {
     res.status(405).json({ error: 'Method not allowed' });
   }
