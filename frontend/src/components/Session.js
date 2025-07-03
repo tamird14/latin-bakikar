@@ -94,7 +94,7 @@ const Session = () => {
         socket.off('playbackStateChanged');
       };
     }
-  }, [sessionId]); // Only depend on sessionId, not socket
+  }, [sessionId]); // Only depend on sessionId, not socket to prevent infinite loops // eslint-disable-line react-hooks/exhaustive-deps
 
   // Update client count from session data
   useEffect(() => {
