@@ -1,7 +1,10 @@
-const { v4: uuidv4 } = require('uuid');
-
 // Store active sessions (in a real app, you'd use a database)
 const sessions = new Map();
+
+// Simple ID generator (replacing uuid)
+function generateSessionId() {
+  return Math.random().toString(36).substring(2, 10);
+}
 
 module.exports = function handler(req, res) {
   console.log('🔥 API called:', req.method, req.url);
@@ -25,7 +28,7 @@ module.exports = function handler(req, res) {
       const sessionName = req.body?.name || 'Music Session';
       console.log('📝 Session name:', sessionName);
       
-      const sessionId = uuidv4().substring(0, 8);
+      const sessionId = generateSessionId();
       const session = {
         id: sessionId,
         hostId: null,
