@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useRef, useEffect, useState } from 'react';
 import { getStreamUrl } from '../services/api';
 
@@ -110,7 +111,6 @@ const PersistentAudioPlayer = ({
   const [lastLoadedSongId, setLastLoadedSongId] = useState(null);
   const loadingRef = useRef(false); // Prevent concurrent loading
   
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!currentSong || !audioRef.current) {
       if (currentSrc) {
