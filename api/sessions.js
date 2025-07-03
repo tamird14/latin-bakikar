@@ -3,7 +3,7 @@ const { v4: uuidv4 } = require('uuid');
 // Store active sessions (in a real app, you'd use a database)
 const sessions = new Map();
 
-module.exports = async function handler(req, res) {
+module.exports = function handler(req, res) {
   console.log('🔥 API called:', req.method, req.url);
   console.log('🔥 Request body:', req.body);
   
@@ -11,25 +11,6 @@ module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  
-  // Parse request body for POST requests
-  if (req.method === 'POST' && !req.body) {
-    try {
-      let body = '';
-      req.on('data', chunk => {
-        body += chunk.toString();
-      });
-      req.on('end', () => {
-        try {
-          req.body = JSON.parse(body);
-        } catch (e) {
-          req.body = {};
-        }
-      });
-    } catch (error) {
-      console.error('❌ Error parsing request body:', error);
-    }
-  }
 
   if (req.method === 'OPTIONS') {
     res.status(200).end();
