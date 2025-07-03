@@ -15,7 +15,7 @@ const Session = () => {
   const { socket, isConnected } = useSocket();
   
   const [session, setSession] = useState(null);
-  const [isHost, setIsHost] = useState(searchParams.get('host') === 'true');
+  const [isHost, setIsHost] = useState(searchParams.get('host') === 'true'); // eslint-disable-line no-unused-vars
   const [currentSong, setCurrentSong] = useState(null);
   const [queue, setQueue] = useState([]);
   const [isPlaying, setIsPlaying] = useState(false);

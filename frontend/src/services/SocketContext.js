@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import io from 'socket.io-client';
+// import io from 'socket.io-client'; // Disabled for serverless deployment
 
 const SocketContext = createContext();
 
