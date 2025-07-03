@@ -15,8 +15,9 @@ export const createSession = async (name) => {
   return response.data;
 };
 
-export const getSession = async (sessionId) => {
-  const response = await api.get(`/sessions/${sessionId}`);
+export const getSession = async (sessionId, clientId = null) => {
+  const params = clientId ? { clientId } : {};
+  const response = await api.get(`/sessions/${sessionId}`, { params });
   return response.data;
 };
 

@@ -63,8 +63,9 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Latin BaKikar API is running' });
 });
 
-// Create new session (host only)
+// Session endpoints
 app.post('/api/sessions', (req, res) => {
+  console.log('🔥 POST /api/sessions - Creating new session');
   const sessionId = uuidv4().substring(0, 8);
   const session = {
     id: sessionId,
@@ -73,18 +74,40 @@ app.post('/api/sessions', (req, res) => {
     currentSong: null,
     queue: [],
     isPlaying: false,
-    clients: new Set()
+    clients: new Set(),
+    lastUpdate: Date.now()
   };
   
   sessions.set(sessionId, session);
+  console.log('✅ Created session:', sessionId);
   res.json({ sessionId, message: 'Session created successfully' });
 });
 
-// Get session info
 app.get('/api/sessions/:sessionId', (req, res) => {
-  const session = sessions.get(req.params.sessionId);
+  console.log('🔥 GET /api/sessions/:sessionId - Getting session:', req.params.sessionId);
+  const sessionId = req.params.sessionId;
+  const clientId = req.query.clientId;
+  
+  let session = sessions.get(sessionId);
   if (!session) {
-    return res.status(404).json({ error: 'Session not found' });
+    console.log('📝 Creating new session for GET request:', sessionId);
+    session = {
+      id: sessionId,
+      hostId: null,
+      name: `Session ${sessionId}`,
+      currentSong: null,
+      queue: [],
+      isPlaying: false,
+      clients: new Set(),
+      lastUpdate: Date.now()
+    };
+    sessions.set(sessionId, session);
+  }
+  
+  // Add client if provided (heartbeat)
+  if (clientId) {
+    session.clients.add(clientId);
+    console.log('💓 Client heartbeat via GET:', clientId, 'Total clients:', session.clients.size);
   }
   
   res.json({
@@ -93,7 +116,72 @@ app.get('/api/sessions/:sessionId', (req, res) => {
     currentSong: session.currentSong,
     queue: session.queue,
     isPlaying: session.isPlaying,
-    clientCount: session.clients.size
+    clientCount: session.clients.size,
+    lastUpdate: session.lastUpdate
+  });
+});
+
+app.post('/api/sessions/:sessionId', (req, res) => {
+  console.log('🔥 POST /api/sessions/:sessionId - Update session:', req.params.sessionId, 'Body:', req.body);
+  const sessionId = req.params.sessionId;
+  let session = sessions.get(sessionId);
+  
+  if (!session) {
+    console.log('📝 Creating new session for POST request:', sessionId);
+    session = {
+      id: sessionId,
+      hostId: null,
+      name: `Session ${sessionId}`,
+      currentSong: null,
+      queue: [],
+      isPlaying: false,
+      clients: new Set(),
+      lastUpdate: Date.now()
+    };
+    sessions.set(sessionId, session);
+  }
+  
+  // Handle client actions
+  if (req.body.action === 'join') {
+    const clientId = req.body.clientId || `client_${Date.now()}`;
+    session.clients.add(clientId);
+    console.log('👤 Client joined session:', sessionId, 'Client ID:', clientId, 'Total clients:', session.clients.size);
+  }
+  
+  if (req.body.action === 'leave') {
+    const clientId = req.body.clientId;
+    if (clientId) {
+      session.clients.delete(clientId);
+      console.log('👤 Client left session:', sessionId, 'Client ID:', clientId, 'Total clients:', session.clients.size);
+    }
+  }
+  
+  // Handle other updates
+  if (req.body.queue !== undefined) {
+    session.queue = req.body.queue;
+    console.log('🎵 Updated queue, now has:', session.queue.length, 'songs');
+  }
+  
+  if (req.body.currentSong !== undefined) {
+    session.currentSong = req.body.currentSong;
+    console.log('🎵 Updated current song:', session.currentSong?.name || 'none');
+  }
+  
+  if (req.body.isPlaying !== undefined) {
+    session.isPlaying = req.body.isPlaying;
+    console.log('🎵 Updated playing state:', session.isPlaying);
+  }
+  
+  session.lastUpdate = Date.now();
+  
+  res.json({
+    id: session.id,
+    name: session.name,
+    currentSong: session.currentSong,
+    queue: session.queue,
+    isPlaying: session.isPlaying,
+    clientCount: session.clients.size,
+    lastUpdate: session.lastUpdate
   });
 });
 

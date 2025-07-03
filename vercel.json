@@ -4,7 +4,11 @@
   "installCommand": "npm install",
   "rewrites": [
     {
-      "source": "/api/sessions/(.*)",
+      "source": "/api/sessions/([^/]+)",
+      "destination": "/api/sessions?sessionId=$1"
+    },
+    {
+      "source": "/api/sessions",
       "destination": "/api/sessions"
     },
     {

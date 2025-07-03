@@ -30,6 +30,7 @@ const Session = () => {
   const [audioError, setAudioError] = useState('');
   const [volume, setVolume] = useState(1);
   const [seekTime, setSeekTime] = useState(null);
+  const [toastMessage, setToastMessage] = useState('');
   
   // Ref to track current song for socket comparisons
   const currentSongRef = useRef(null);
@@ -43,7 +44,11 @@ const Session = () => {
   useEffect(() => {
     const loadSession = async () => {
       try {
-        const sessionData = await getSession(sessionId);
+        // Get client ID from socket for heartbeat tracking
+        const clientId = socket?.getClientId ? socket.getClientId() : null;
+        const sessionData = await getSession(sessionId, clientId);
+        console.log('🔄 Initial session data loaded:', sessionData);
+        console.log('👥 Initial client count:', sessionData.clientCount);
         setSession(sessionData);
         setCurrentSong(sessionData.currentSong);
         setQueue(sessionData.queue || []);
@@ -57,12 +62,13 @@ const Session = () => {
     };
 
     loadSession();
-  }, [sessionId]); // socket not needed here since it's not used in the effect
+  }, [sessionId, socket]); // Add socket dependency to get client ID
 
   // Socket connection and sync - only run once per session
   useEffect(() => {
     if (socket && sessionId) {
-      console.log('Setting up session sync for:', sessionId);
+      console.log('🔧 Setting up session sync for:', sessionId);
+      console.log('🆔 Using client ID:', socket.getClientId?.());
       
       // Set session ID for socket sync
       socket.setSessionId(sessionId);
@@ -88,6 +94,7 @@ const Session = () => {
       
       // Cleanup
       return () => {
+        console.log('🧹 Cleaning up session sync for:', sessionId);
         socket.emit('leaveSession', { sessionId });
         socket.off('queueUpdated');
         socket.off('songChanged');
@@ -100,6 +107,7 @@ const Session = () => {
   // Update client count from session data
   useEffect(() => {
     if (sessionData && sessionData.clientCount !== undefined) {
+      console.log('👥 Updating client count from session data:', sessionData.clientCount);
       setClientCount(sessionData.clientCount);
     }
   }, [sessionData]);
@@ -108,6 +116,10 @@ const Session = () => {
     console.log('🎵 Adding to queue:', song);
     const newQueue = [...queue, song];
     setQueue(newQueue);
+    
+    // Show confirmation toast
+    setToastMessage(`"${song.name}" added to queue`);
+    setTimeout(() => setToastMessage(''), 2500);
     
     // Sync to other devices
     if (socket) {
@@ -174,19 +186,34 @@ const Session = () => {
 
   const handleNextSong = () => {
     console.log('⏭️ Next song');
-    if (isHost && queue.length > 0) {
-      const nextSong = queue[0];
-      const newQueue = queue.slice(1);
-      
-      setCurrentSong(nextSong);
-      setQueue(newQueue);
-      setIsPlaying(true);
-      
-      // Sync to other devices
-      if (socket) {
-        socket.emit('updateCurrentSong', nextSong);
-        socket.emit('updateQueue', newQueue);
-        socket.emit('updatePlaybackState', true);
+    if (isHost) {
+      if (queue.length > 0) {
+        // Play next song from queue
+        const nextSong = queue[0];
+        const newQueue = queue.slice(1);
+        
+        setCurrentSong(nextSong);
+        setQueue(newQueue);
+        setIsPlaying(true);
+        
+        // Sync to other devices
+        if (socket) {
+          socket.emit('updateCurrentSong', nextSong);
+          socket.emit('updateQueue', newQueue);
+          socket.emit('updatePlaybackState', true);
+        }
+      } else {
+        // Queue is empty - stop playing and clear current song
+        console.log('📭 Queue is empty - stopping playback');
+        setCurrentSong(null);
+        setIsPlaying(false);
+        setCurrentTime(0);
+        
+        // Sync to other devices
+        if (socket) {
+          socket.emit('updateCurrentSong', null);
+          socket.emit('updatePlaybackState', false);
+        }
       }
     }
   };
@@ -353,6 +380,7 @@ const Session = () => {
             duration={duration}
             volume={volume}
             error={audioError}
+            queue={queue}
             onPlayPause={handlePlayPause}
             onNext={handleNextSong}
             onStop={handleStop}
@@ -381,6 +409,20 @@ const Session = () => {
                 </button>
               </div>
             </div>
+          </div>
+        )}
+        
+        {/* Show toast message when song is added to queue */}
+        {toastMessage && (
+          <div className="fixed bottom-4 right-4 bg-green-500 text-white px-3 py-2 rounded-full shadow-xl z-50 flex items-center space-x-2 transform transition-all duration-300 ease-out scale-100 opacity-100 max-w-sm">
+            <span className="text-sm">✅</span>
+            <span className="text-sm truncate flex-1 font-medium">{toastMessage.replace('✅ ', '')}</span>
+            <button 
+              onClick={() => setToastMessage('')}
+              className="text-green-200 hover:text-white text-xs ml-1 flex-shrink-0 opacity-60 hover:opacity-100 transition-opacity"
+            >
+              ✕
+            </button>
           </div>
         )}
         

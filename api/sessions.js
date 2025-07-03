@@ -1,13 +1,40 @@
 // Store active sessions (in a real app, you'd use a database)
 const sessions = new Map();
 
-// Store client connections for each session
+// Store client connections for each session with timestamps
 const sessionClients = new Map();
+
+// Client heartbeat timeout (if no activity for 30 seconds, remove client)
+const CLIENT_TIMEOUT = 30000;
 
 // Simple ID generator (replacing uuid)
 function generateSessionId() {
   return Math.random().toString(36).substring(2, 10);
 }
+
+// Clean up stale clients
+function cleanupStaleClients() {
+  const now = Date.now();
+  
+  for (const [sessionId, clients] of sessionClients) {
+    const activeClients = new Map();
+    
+    for (const [clientId, timestamp] of clients) {
+      if (now - timestamp < CLIENT_TIMEOUT) {
+        activeClients.set(clientId, timestamp);
+      } else {
+        console.log('🕐 Removing stale client:', clientId, 'from session:', sessionId);
+      }
+    }
+    
+    if (activeClients.size !== clients.size) {
+      sessionClients.set(sessionId, activeClients);
+    }
+  }
+}
+
+// Run cleanup every 10 seconds
+setInterval(cleanupStaleClients, 10000);
 
 module.exports = function handler(req, res) {
   console.log('🔥 API called:', req.method, req.url);
@@ -16,22 +43,48 @@ module.exports = function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, text/plain');
 
   if (req.method === 'OPTIONS') {
     res.status(200).end();
     return;
   }
 
+  // Handle sendBeacon requests which might have different content-type
+  if (req.method === 'POST' && typeof req.body === 'string') {
+    try {
+      req.body = JSON.parse(req.body);
+    } catch (e) {
+      console.log('Failed to parse body as JSON:', req.body);
+    }
+  }
+
   // Check if this is a request for a specific session ID
   const urlParts = req.url.split('/');
-  const isSessionIdRequest = urlParts.length > 3 && urlParts[3] && urlParts[3] !== '';
+  const sessionIdFromUrl = urlParts.length > 3 && urlParts[3] && urlParts[3] !== '' ? urlParts[3] : null;
+  const sessionIdFromQuery = req.query?.sessionId;
+  const sessionId = sessionIdFromQuery || sessionIdFromUrl; // Prefer query param for Vercel routing
+  const isSessionIdRequest = !!sessionId;
   
   if (req.method === 'GET' && isSessionIdRequest) {
     // Handle GET /api/sessions/{sessionId}
     try {
-      const sessionId = urlParts[3];
-      console.log('🔍 GET request for session:', sessionId);
+      const clientId = req.query?.clientId; // Get client ID from query parameter
+      console.log('🔍 GET request for session:', sessionId, 'Client ID:', clientId);
+      
+      // Update client heartbeat if clientId is provided
+      if (clientId) {
+        let clients = sessionClients.get(sessionId) || new Map();
+        if (clients.has(clientId)) {
+          clients.set(clientId, Date.now());
+          console.log('💓 Client heartbeat via GET:', sessionId, 'Client ID:', clientId);
+        } else {
+          // Client not in session, add them
+          clients.set(clientId, Date.now());
+          sessionClients.set(sessionId, clients);
+          console.log('👤 Client auto-joined via GET:', sessionId, 'Client ID:', clientId);
+        }
+      }
       
       // Check if session exists in memory first
       const existingSession = sessions.get(sessionId);
@@ -39,7 +92,7 @@ module.exports = function handler(req, res) {
         console.log('✅ Found existing session in memory:', existingSession.name);
         
         // Update client count from active connections
-        const clients = sessionClients.get(sessionId) || new Set();
+        const clients = sessionClients.get(sessionId) || new Map();
         
         res.json({
           id: existingSession.id,
@@ -61,7 +114,7 @@ module.exports = function handler(req, res) {
         currentSong: null,
         queue: [],
         isPlaying: false,
-        clientCount: 1,
+        clientCount: clientId ? 1 : 0, // If client ID provided, count it
         lastUpdate: Date.now()
       };
       
@@ -82,7 +135,6 @@ module.exports = function handler(req, res) {
     if (isUpdateRequest) {
       // Handle session updates (queue, playback state, etc.)
       try {
-        const sessionId = urlParts[3];
         console.log('🔄 Updating session:', sessionId, 'with:', req.body);
         
         let session = sessions.get(sessionId);
@@ -102,15 +154,17 @@ module.exports = function handler(req, res) {
         if (req.body.action === 'join') {
           // Handle client joining
           const clientId = req.body.clientId || `client_${Date.now()}`;
-          let clients = sessionClients.get(sessionId) || new Set();
+          let clients = sessionClients.get(sessionId) || new Map();
           
-          // Only add if not already present
+          // Add or update client timestamp
           if (!clients.has(clientId)) {
-            clients.add(clientId);
+            clients.set(clientId, Date.now());
             sessionClients.set(sessionId, clients);
             console.log('👤 Client joined session:', sessionId, 'Client ID:', clientId, 'Total clients:', clients.size);
           } else {
-            console.log('👤 Client already in session:', sessionId, 'Client ID:', clientId);
+            // Update timestamp for existing client (heartbeat)
+            clients.set(clientId, Date.now());
+            console.log('💓 Client heartbeat:', sessionId, 'Client ID:', clientId);
           }
         }
         
@@ -118,7 +172,7 @@ module.exports = function handler(req, res) {
           // Handle client leaving
           const clientId = req.body.clientId;
           if (clientId) {
-            let clients = sessionClients.get(sessionId) || new Set();
+            let clients = sessionClients.get(sessionId) || new Map();
             if (clients.has(clientId)) {
               clients.delete(clientId);
               sessionClients.set(sessionId, clients);
@@ -145,7 +199,7 @@ module.exports = function handler(req, res) {
         session.lastUpdate = Date.now();
         sessions.set(sessionId, session);
         
-        const clients = sessionClients.get(sessionId) || new Set();
+        const clients = sessionClients.get(sessionId) || new Map();
         
         res.json({
           id: session.id,

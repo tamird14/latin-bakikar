@@ -15,7 +15,11 @@ export const SocketProvider = ({ children }) => {
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(true); // Always connected for polling
   const [sessionData, setSessionData] = useState(null);
-  const [clientId] = useState(() => `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+  const [clientId] = useState(() => {
+    const id = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    console.log('🆔 Generated client ID:', id);
+    return id;
+  });
   
   const pollInterval = useRef(null);
   const currentSessionId = useRef(null);
@@ -30,6 +34,7 @@ export const SocketProvider = ({ children }) => {
   // API functions for session management
   const updateSession = useCallback(async (sessionId, updates) => {
     try {
+      console.log('🔄 Updating session:', sessionId, 'with updates:', updates);
       const response = await fetch(`/api/sessions/${sessionId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -38,9 +43,12 @@ export const SocketProvider = ({ children }) => {
       
       if (response.ok) {
         const data = await response.json();
+        console.log('✅ Session updated successfully, client count:', data.clientCount);
         setSessionData(data);
         lastUpdate.current = data.lastUpdate;
         return data;
+      } else {
+        console.error('❌ Failed to update session:', response.status, response.statusText);
       }
     } catch (error) {
       console.error('Failed to update session:', error);
@@ -49,7 +57,7 @@ export const SocketProvider = ({ children }) => {
   
   const pollSession = useCallback(async (sessionId) => {
     try {
-      const response = await fetch(`/api/sessions/${sessionId}`);
+      const response = await fetch(`/api/sessions/${sessionId}?clientId=${encodeURIComponent(clientId)}`);
       if (response.ok) {
         const data = await response.json();
         
@@ -72,11 +80,13 @@ export const SocketProvider = ({ children }) => {
             }
           }
         }
+      } else {
+        console.error('❌ Poll failed:', response.status, response.statusText);
       }
     } catch (error) {
       console.error('Failed to poll session:', error);
     }
-  }, []); // Remove sessionData dependency to prevent circular updates
+  }, [clientId]); // Add clientId dependency
   
   const mockSocket = useRef(null);
   
@@ -91,6 +101,7 @@ export const SocketProvider = ({ children }) => {
         
         switch (event) {
           case 'joinSession':
+            console.log('🏠 Client joining session:', sessionId, 'with client ID:', clientId);
             updateSession(sessionId, { action: 'join', clientId });
             // Start polling only if not already polling
             if (!pollInterval.current) {
@@ -99,6 +110,7 @@ export const SocketProvider = ({ children }) => {
             break;
             
           case 'leaveSession':
+            console.log('🚪 Client leaving session:', sessionId, 'with client ID:', clientId);
             updateSession(sessionId, { action: 'leave', clientId });
             // Stop polling
             if (pollInterval.current) {
@@ -151,8 +163,22 @@ export const SocketProvider = ({ children }) => {
         currentSessionId.current = sessionId;
       },
       
-      getSessionData: () => sessionDataRef.current
+      getSessionData: () => sessionDataRef.current,
+      
+      getClientId: () => clientId
     };
+    
+    // Handle page unload to clean up clients
+    const handleBeforeUnload = () => {
+      const sessionId = currentSessionId.current;
+      if (sessionId && clientId) {
+        console.log('🚪 Page unloading, cleaning up client:', clientId);
+        // Send synchronous request to clean up the client
+        navigator.sendBeacon(`/api/sessions/${sessionId}`, JSON.stringify({ action: 'leave', clientId }));
+      }
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
     
     mockSocket.current = socket;
     setSocket(socket);
@@ -160,10 +186,19 @@ export const SocketProvider = ({ children }) => {
     
     // Cleanup on unmount
     return () => {
+      // Clean up the current session if any
+      const sessionId = currentSessionId.current;
+      if (sessionId && clientId) {
+        console.log('🚪 Component cleanup, leaving session:', sessionId, 'with client ID:', clientId);
+        updateSession(sessionId, { action: 'leave', clientId });
+      }
+      
       if (pollInterval.current) {
         clearInterval(pollInterval.current);
         pollInterval.current = null;
       }
+      
+      window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [updateSession, pollSession, clientId]); // Removed sessionData dependency
 

@@ -115,14 +115,19 @@ const PersistentAudioPlayer = ({
     if (!currentSong || !audioRef.current) {
       if (currentSrc) {
         console.log('Clearing current song');
+        // Properly stop and clear audio element
+        if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+          audioRef.current.removeAttribute('src');
+          audioRef.current.load();
+        }
         setCurrentSrc('');
         setIsReady(false);
         setLastLoadedSongId(null);
         loadingRef.current = false;
-        if (audioRef.current) {
-          audioRef.current.src = '';
-          audioRef.current.load();
-        }
+        // Clear any previous errors when successfully clearing audio
+        onErrorRef.current?.(null);
       }
       return;
     }
@@ -235,6 +240,12 @@ const PersistentAudioPlayer = ({
       return;
     }
     
+    // Don't report "empty src" errors when we have no current song (expected when queue ends)
+    if (!currentSongRef.current && e.target?.error?.message?.includes('Empty src')) {
+      console.log('Audio empty src error when no current song (expected after queue ends)');
+      return;
+    }
+    
     console.error('Audio error:', e);
     const errorMessage = e.target?.error ? 
       `Audio error: ${e.target.error.message || 'Unknown error'}` : 
@@ -272,7 +283,11 @@ const PersistentAudioPlayer = ({
       audioRef.current.currentTime = 0;
     }
     setIsReady(false); // Prevent any play attempts during transition
-    onNextRef.current?.();
+    
+    // Small delay to ensure audio is fully stopped before triggering next
+    setTimeout(() => {
+      onNextRef.current?.();
+    }, 100);
   };
 
   return (

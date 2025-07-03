@@ -7,7 +7,8 @@ const MusicPlayer = ({
   currentTime, 
   duration, 
   volume,
-  error, 
+  error,
+  queue,
   onPlayPause, 
   onNext,
   onStop,
@@ -43,6 +44,41 @@ const MusicPlayer = ({
   };
 
   if (!currentSong) {
+    // Show play button if there are songs in the queue
+    if (queue && queue.length > 0) {
+      return (
+        <div className="max-w-md mx-auto">
+          <div className="flex flex-col items-center justify-center h-96 text-gray-400">
+            <div className="w-32 h-32 bg-gray-700 rounded-full flex items-center justify-center mb-4">
+              <span className="text-4xl">🎵</span>
+            </div>
+            <p className="text-lg mb-2">Ready to play</p>
+            <p className="text-sm mb-6">{queue.length} song{queue.length > 1 ? 's' : ''} in queue</p>
+            
+            {/* Play button to start queue */}
+            {isHost && (
+              <button
+                onClick={() => onPlayPause()}
+                className="w-16 h-16 bg-purple-600 hover:bg-purple-700 rounded-full flex items-center justify-center text-2xl transition-colors"
+                title="Start playing from queue"
+              >
+                ▶️
+              </button>
+            )}
+            
+            {!isHost && (
+              <div className="mt-4 p-3 bg-gray-800 rounded-lg text-center">
+                <p className="text-sm text-gray-400">
+                  Only the host can start playback
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+    
+    // Show empty state if no queue
     return (
       <div className="flex flex-col items-center justify-center h-96 text-gray-400">
         <div className="w-32 h-32 bg-gray-700 rounded-full flex items-center justify-center mb-4">
