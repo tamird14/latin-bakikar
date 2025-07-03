@@ -21,11 +21,7 @@ module.exports = async function handler(req, res) {
       const urlParts = req.url.split('/');
       const fileId = urlParts[urlParts.length - 1];
       
-      console.log('🎵 Full URL:', req.url);
-      console.log('🎵 URL parts:', urlParts);
-      console.log('🎵 Extracted fileId:', fileId);
-      console.log('🎵 FileId type:', typeof fileId);
-      console.log('🎵 FileId length:', fileId?.length);
+      console.log('🎵 Getting stream URL for file:', fileId);
       
       if (!fileId || fileId.trim() === '') {
         console.log('❌ No fileId found in URL');
@@ -38,10 +34,10 @@ module.exports = async function handler(req, res) {
       // Get real stream data from Google Drive
       const streamData = await driveService.getFileStreamUrl(fileId);
       
-      // Return the streaming URL for the client
+      // Return the proxy streaming URL for the client
       console.log('✅ Returning stream data for:', fileId);
       res.json({
-        url: `https://drive.google.com/uc?id=${fileId}&export=download`,
+        url: `/api/drive/proxy/${fileId}`,
         fileId: fileId,
         name: streamData.name,
         mimeType: streamData.mimeType,

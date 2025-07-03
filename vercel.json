@@ -24,6 +24,10 @@
       "destination": "/api/drive/stream/[fileId]"
     },
     {
+      "source": "/api/drive/proxy/(.*)",
+      "destination": "/api/drive/proxy/[fileId]"
+    },
+    {
       "source": "/api/drive/auth/init",
       "destination": "/api/drive/auth/init"
     },
