@@ -30,18 +30,34 @@ module.exports = function handler(req, res) {
       const sessionId = urlParts[3];
       console.log('🔍 GET request for session:', sessionId);
       
-      // For demo purposes, return a mock session for any ID
-      const mockSession = {
+      // Check if session exists in memory first
+      const existingSession = sessions.get(sessionId);
+      if (existingSession) {
+        console.log('✅ Found existing session in memory:', existingSession.name);
+        res.json({
+          id: existingSession.id,
+          name: existingSession.name,
+          currentSong: existingSession.currentSong,
+          queue: existingSession.queue,
+          isPlaying: existingSession.isPlaying,
+          clientCount: existingSession.clients?.size || 1
+        });
+        return;
+      }
+      
+      // If not in memory, create a default session with a better name
+      // In production, this would query a database
+      const defaultSession = {
         id: sessionId,
-        name: `Demo Session ${sessionId}`,
+        name: `Session ${sessionId}`, // Better default name
         currentSong: null,
         queue: [],
         isPlaying: false,
         clientCount: 1
       };
       
-      console.log('✅ Returning mock session:', mockSession.id);
-      res.json(mockSession);
+      console.log('✅ Returning default session for:', sessionId);
+      res.json(defaultSession);
       return;
     } catch (error) {
       console.error('❌ Error getting session:', error);
