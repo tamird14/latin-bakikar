@@ -28,7 +28,13 @@ module.exports = async function handler(req, res) {
       const driveService = new GoogleDriveService();
       
       // Get real search results from Google Drive
+      console.log('🔍 Starting search with query:', JSON.stringify(query));
       const searchResults = await driveService.searchMusicFiles(query, folderId);
+      
+      console.log('🔍 Search results found:', searchResults.length);
+      if (searchResults.length > 0) {
+        console.log('🔍 First few results:', searchResults.slice(0, 3).map(f => f.name));
+      }
       
       console.log('✅ Returning search results:', searchResults.length);
       res.json({ files: searchResults });

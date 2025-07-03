@@ -130,6 +130,9 @@ class GoogleDriveService {
 
       const targetFolderId = folderId || this.sharedFolderId;
       const searchQuery = `'${targetFolderId}' in parents and trashed=false and name contains '${query}'`;
+      
+      console.log('🔍 Google Drive search query:', searchQuery);
+      console.log('🔍 Target folder ID:', targetFolderId);
 
       const response = await this.drive.files.list({
         q: searchQuery,
@@ -137,6 +140,8 @@ class GoogleDriveService {
         pageSize: 50,
         orderBy: 'name'
       });
+      
+      console.log('🔍 Google Drive API response:', response.data.files?.length || 0, 'files');
 
       const allFiles = response.data.files || [];
       const musicFiles = allFiles.filter(file => 
