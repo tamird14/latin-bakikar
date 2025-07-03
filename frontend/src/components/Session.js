@@ -59,153 +59,54 @@ const Session = () => {
     loadSession();
   }, [sessionId]);
 
-  // Socket connection and event handlers
+  // Socket connection disabled for serverless deployment
   useEffect(() => {
-    if (!socket || !isConnected || !sessionId) return;
-
-    // Join the session
-    socket.emit('join-session', {
-      sessionId,
-      userType: isHost ? 'host' : 'guest'
-    });
-
-    // Socket event listeners
-    socket.on('session-state', (data) => {
-      console.log('📡 Socket: session-state received');
-      if (data.currentSong?.id !== currentSongRef.current?.id) {
-        setCurrentSong(data.currentSong);
-      }
-      setQueue(data.queue || []);
-      setIsPlaying(data.isPlaying);
-      setIsHost(data.isHost);
-    });
-
-    socket.on('host-status', (data) => {
-      console.log('📡 Socket: host-status received');
-      setIsHost(data.isHost);
-    });
-
-    socket.on('queue-updated', (newQueue) => {
-      console.log('📡 Socket: queue-updated received', {
-        queueLength: newQueue.length,
-        firstSong: newQueue[0]?.name
-      });
-      setQueue(newQueue);
-    });
-
-    socket.on('playback-state', (data) => {
-      console.log('📡 Socket: playback-state received', {
-        isPlaying: data.isPlaying,
-        newSong: data.currentSong?.name,
-        newSongId: data.currentSong?.id,
-        previousSong: currentSongRef.current?.name,
-        previousSongId: currentSongRef.current?.id,
-        willUpdateSong: data.currentSong && data.currentSong.id !== currentSongRef.current?.id
-      });
-      setIsPlaying(data.isPlaying);
-      // Only update current song if it's actually different
-      if (data.currentSong && data.currentSong.id !== currentSongRef.current?.id) {
-        setCurrentSong(data.currentSong);
-      }
-    });
-
-    socket.on('song-changed', (data) => {
-      console.log('📡 Socket: song-changed received', {
-        newSong: data.currentSong?.name,
-        newSongId: data.currentSong?.id,
-        previousSong: currentSongRef.current?.name,
-        previousSongId: currentSongRef.current?.id,
-        queueLength: data.queue?.length,
-        isPlaying: data.isPlaying
-      });
-      if (data.currentSong?.id !== currentSongRef.current?.id) {
-        setCurrentSong(data.currentSong);
-      }
-      setQueue(data.queue);
-      setIsPlaying(data.isPlaying);
-    });
-
-    socket.on('client-count', (count) => {
-      setClientCount(count);
-    });
-
-    socket.on('host-disconnected', () => {
-      setIsHost(false);
-      setIsPlaying(false);
-    });
-
-    socket.on('error', (data) => {
-      setError(data.message);
-    });
-
-    socket.on('stop-song', () => {
-      console.log('📡 Socket: stop-song received');
-      setIsPlaying(false);
-      setCurrentTime(0);
-    });
-
-    return () => {
-      socket.off('session-state');
-      socket.off('host-status');
-      socket.off('queue-updated');
-      socket.off('playback-state');
-      socket.off('song-changed');
-      socket.off('client-count');
-      socket.off('host-disconnected');
-      socket.off('error');
-      socket.off('stop-song');
-    };
+    console.log('Socket.io features disabled for serverless deployment');
+    // Real-time features temporarily disabled
+    // Session will work in basic mode with API calls only
   }, [socket, isConnected, sessionId, isHost]);
 
   const handleAddToQueue = (song) => {
-    if (socket) {
-      socket.emit('add-to-queue', { song });
-    }
+    // Local mode - no socket connection needed
+    console.log('🎵 Adding to queue (local mode):', song);
+    setQueue(prev => [...prev, song]);
   };
 
   const handleReorderQueue = (newQueue) => {
-    if (socket && isHost) {
-      socket.emit('reorder-queue', { queue: newQueue });
+    // Local mode - no socket connection needed  
+    console.log('🔄 Reordering queue (local mode):', newQueue);
+    if (isHost) {
+      setQueue(newQueue);
     }
   };
 
   const handlePlayPause = (song = null) => {
-    if (socket && isHost) {
+    // Local mode - no socket connection needed
+    console.log('⏯️ Play/pause (local mode):', song);
+    if (isHost) {
       const songToPlay = song || currentSong;
-      console.log('🎵 Frontend: Emitting play-pause', {
-        isPlaying: !isPlaying,
-        song: songToPlay?.name,
-        songId: songToPlay?.id,
-        isHost,
-        socketConnected: socket.connected
-      });
-      socket.emit('play-pause', {
-        isPlaying: !isPlaying,
-        song: songToPlay
-      });
-    } else {
-      console.log('❌ Cannot play-pause:', { socket: !!socket, isHost, isPlaying });
+      setIsPlaying(!isPlaying);
+      if (songToPlay && songToPlay !== currentSong) {
+        setCurrentSong(songToPlay);
+      }
     }
   };
 
   const handleNextSong = () => {
-    console.log('⏭️ Frontend: Next song requested', {
-      socket: !!socket,
-      isHost,
-      socketConnected: socket?.connected,
-      currentQueue: queue.length,
-      currentSong: currentSong?.name
-    });
-    if (socket && isHost) {
-      socket.emit('next-song');
-    } else {
-      console.log('❌ Cannot emit next-song:', { socket: !!socket, isHost });
+    // Local mode - no socket connection needed
+    console.log('⏭️ Next song (local mode)');
+    if (isHost && queue.length > 0) {
+      const nextSong = queue[0];
+      setCurrentSong(nextSong);
+      setQueue(prev => prev.slice(1));
+      setIsPlaying(true);
     }
   };
 
   const handleStop = () => {
-    if (socket && isHost) {
-      socket.emit('stop-song');
+    // Local mode - no socket connection needed
+    console.log('⏹️ Stop (local mode)');
+    if (isHost) {
       setIsPlaying(false);
       setCurrentTime(0);
     }

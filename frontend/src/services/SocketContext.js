@@ -16,23 +16,19 @@ export const SocketProvider = ({ children }) => {
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
-    const newSocket = io(process.env.REACT_APP_SERVER_URL || 'http://localhost:5001');
+    // Temporarily disable Socket.io for serverless deployment
+    console.log('Socket.io disabled for serverless deployment');
     
-    newSocket.on('connect', () => {
-      console.log('Connected to server');
-      setIsConnected(true);
-    });
-
-    newSocket.on('disconnect', () => {
-      console.log('Disconnected from server');
-      setIsConnected(false);
-    });
-
-    setSocket(newSocket);
-
-    return () => {
-      newSocket.close();
+    // Mock socket for compatibility
+    const mockSocket = {
+      emit: (event, data) => console.log('Mock socket emit:', event, data),
+      on: (event, callback) => console.log('Mock socket on:', event),
+      off: (event) => console.log('Mock socket off:', event),
+      connected: false
     };
+    
+    setSocket(mockSocket);
+    setIsConnected(false); // Keep disconnected for now
   }, []);
 
   const value = {
