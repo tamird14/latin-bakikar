@@ -103,9 +103,15 @@ module.exports = function handler(req, res) {
           // Handle client joining
           const clientId = req.body.clientId || `client_${Date.now()}`;
           let clients = sessionClients.get(sessionId) || new Set();
-          clients.add(clientId);
-          sessionClients.set(sessionId, clients);
-          console.log('👤 Client joined session:', sessionId, 'Total clients:', clients.size);
+          
+          // Only add if not already present
+          if (!clients.has(clientId)) {
+            clients.add(clientId);
+            sessionClients.set(sessionId, clients);
+            console.log('👤 Client joined session:', sessionId, 'Client ID:', clientId, 'Total clients:', clients.size);
+          } else {
+            console.log('👤 Client already in session:', sessionId, 'Client ID:', clientId);
+          }
         }
         
         if (req.body.action === 'leave') {
@@ -113,9 +119,11 @@ module.exports = function handler(req, res) {
           const clientId = req.body.clientId;
           if (clientId) {
             let clients = sessionClients.get(sessionId) || new Set();
-            clients.delete(clientId);
-            sessionClients.set(sessionId, clients);
-            console.log('👤 Client left session:', sessionId, 'Total clients:', clients.size);
+            if (clients.has(clientId)) {
+              clients.delete(clientId);
+              sessionClients.set(sessionId, clients);
+              console.log('👤 Client left session:', sessionId, 'Client ID:', clientId, 'Total clients:', clients.size);
+            }
           }
         }
         

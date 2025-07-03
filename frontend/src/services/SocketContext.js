@@ -20,6 +20,12 @@ export const SocketProvider = ({ children }) => {
   const pollInterval = useRef(null);
   const currentSessionId = useRef(null);
   const lastUpdate = useRef(0);
+  const sessionDataRef = useRef(null);
+  
+  // Update sessionDataRef when sessionData changes
+  useEffect(() => {
+    sessionDataRef.current = sessionData;
+  }, [sessionData]);
   
   // API functions for session management
   const updateSession = useCallback(async (sessionId, updates) => {
@@ -49,18 +55,19 @@ export const SocketProvider = ({ children }) => {
         
         // Only update if the data is newer than what we have
         if (data.lastUpdate > lastUpdate.current) {
+          const currentData = sessionDataRef.current;
           setSessionData(data);
           lastUpdate.current = data.lastUpdate;
           
           // Emit events for compatibility with existing code
           if (mockSocket.current) {
-            if (data.currentSong !== sessionData?.currentSong) {
+            if (data.currentSong !== currentData?.currentSong) {
               mockSocket.current._emit('songChanged', data.currentSong);
             }
-            if (data.queue?.length !== sessionData?.queue?.length) {
+            if (JSON.stringify(data.queue) !== JSON.stringify(currentData?.queue)) {
               mockSocket.current._emit('queueUpdated', data.queue);
             }
-            if (data.isPlaying !== sessionData?.isPlaying) {
+            if (data.isPlaying !== currentData?.isPlaying) {
               mockSocket.current._emit('playbackStateChanged', data.isPlaying);
             }
           }
@@ -69,7 +76,7 @@ export const SocketProvider = ({ children }) => {
     } catch (error) {
       console.error('Failed to poll session:', error);
     }
-  }, [sessionData]);
+  }, []); // Remove sessionData dependency to prevent circular updates
   
   const mockSocket = useRef(null);
   
@@ -85,9 +92,10 @@ export const SocketProvider = ({ children }) => {
         switch (event) {
           case 'joinSession':
             updateSession(sessionId, { action: 'join', clientId });
-            // Start polling
-            if (pollInterval.current) clearInterval(pollInterval.current);
-            pollInterval.current = setInterval(() => pollSession(sessionId), 2000);
+            // Start polling only if not already polling
+            if (!pollInterval.current) {
+              pollInterval.current = setInterval(() => pollSession(sessionId), 2000);
+            }
             break;
             
           case 'leaveSession':
@@ -143,7 +151,7 @@ export const SocketProvider = ({ children }) => {
         currentSessionId.current = sessionId;
       },
       
-      getSessionData: () => sessionData
+      getSessionData: () => sessionDataRef.current
     };
     
     mockSocket.current = socket;
@@ -154,9 +162,10 @@ export const SocketProvider = ({ children }) => {
     return () => {
       if (pollInterval.current) {
         clearInterval(pollInterval.current);
+        pollInterval.current = null;
       }
     };
-  }, [updateSession, pollSession, clientId, sessionData]);
+  }, [updateSession, pollSession, clientId]); // Removed sessionData dependency
 
   const value = {
     socket,

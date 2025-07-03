@@ -50,11 +50,6 @@ const Session = () => {
         setIsPlaying(sessionData.isPlaying);
         setClientCount(sessionData.clientCount);
         setLoading(false);
-        
-        // Set session ID for socket sync
-        if (socket) {
-          socket.setSessionId(sessionId);
-        }
       } catch (err) {
         setError('Session not found');
         setLoading(false);
@@ -64,10 +59,13 @@ const Session = () => {
     loadSession();
   }, [sessionId, socket]);
 
-  // Socket connection and sync
+  // Socket connection and sync - only run once per session
   useEffect(() => {
     if (socket && sessionId) {
       console.log('Setting up session sync for:', sessionId);
+      
+      // Set session ID for socket sync
+      socket.setSessionId(sessionId);
       
       // Join session
       socket.emit('joinSession', { sessionId });
@@ -96,7 +94,7 @@ const Session = () => {
         socket.off('playbackStateChanged');
       };
     }
-  }, [socket, sessionId]);
+  }, [sessionId]); // Only depend on sessionId, not socket
 
   // Update client count from session data
   useEffect(() => {
