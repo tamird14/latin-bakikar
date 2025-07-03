@@ -130,17 +130,40 @@ const Session = () => {
   const handlePlayPause = (song = null) => {
     console.log('⏯️ Play/pause:', song);
     if (isHost) {
-      const songToPlay = song || currentSong;
-      const newPlayingState = !isPlaying;
-      setIsPlaying(newPlayingState);
+      // If no song is specified and no current song, play first song from queue
+      if (!song && !currentSong && queue.length > 0) {
+        const firstSong = queue[0];
+        const newQueue = queue.slice(1);
+        
+        setCurrentSong(firstSong);
+        setQueue(newQueue);
+        setIsPlaying(true);
+        
+        // Sync to other devices
+        if (socket) {
+          socket.emit('updateCurrentSong', firstSong);
+          socket.emit('updateQueue', newQueue);
+          socket.emit('updatePlaybackState', true);
+        }
+        return;
+      }
       
-      if (songToPlay && songToPlay !== currentSong) {
-        setCurrentSong(songToPlay);
+      // If a specific song is provided (different from current), play it
+      if (song && song !== currentSong) {
+        setCurrentSong(song);
+        setIsPlaying(true);
+        
         // Sync current song
         if (socket) {
-          socket.emit('updateCurrentSong', songToPlay);
+          socket.emit('updateCurrentSong', song);
+          socket.emit('updatePlaybackState', true);
         }
+        return;
       }
+      
+      // Otherwise, just toggle play/pause for current song
+      const newPlayingState = !isPlaying;
+      setIsPlaying(newPlayingState);
       
       // Sync playback state
       if (socket) {
@@ -367,7 +390,6 @@ const Session = () => {
             currentSong={currentSong}
             isHost={isHost}
             onReorder={handleReorderQueue}
-            onPlayPause={handlePlayPause}
           />
         )}
         

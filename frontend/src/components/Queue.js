@@ -23,7 +23,6 @@ const SortableQueueItem = ({
   song, 
   index, 
   isHost, 
-  onPlayPause, 
   formatDuration,
   isDragging 
 }) => {
@@ -81,21 +80,11 @@ const SortableQueueItem = ({
           </p>
         </div>
 
-        {/* Duration and Actions */}
+        {/* Duration */}
         <div className="flex items-center space-x-3">
-          <span className="text-sm text-gray-400 hidden sm:inline">
+          <span className="text-sm text-gray-400">
             {formatDuration(song.duration)}
           </span>
-          
-          {isHost && (
-            <button
-              onClick={() => onPlayPause(song)}
-              className="w-8 h-8 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center text-sm transition-colors"
-              title="Play this song"
-            >
-              ▶️
-            </button>
-          )}
         </div>
       </div>
 
@@ -107,7 +96,7 @@ const SortableQueueItem = ({
   );
 };
 
-const Queue = ({ queue, currentSong, isHost, onReorder, onPlayPause }) => {
+const Queue = ({ queue, currentSong, isHost, onReorder }) => {
   const [activeId, setActiveId] = useState(null);
   
   const sensors = useSensors(
@@ -155,8 +144,11 @@ const Queue = ({ queue, currentSong, isHost, onReorder, onPlayPause }) => {
           <span className="text-3xl">📝</span>
         </div>
         <p className="text-lg mb-2">Queue is empty</p>
-        <p className="text-sm text-center">
+        <p className="text-sm text-center mb-4">
           Browse and add songs to start listening together
+        </p>
+        <p className="text-xs text-gray-500 text-center">
+          💡 Songs can only be played from the <strong>Player</strong> tab
         </p>
       </div>
     );
@@ -179,14 +171,6 @@ const Queue = ({ queue, currentSong, isHost, onReorder, onPlayPause }) => {
               <span className="text-sm text-gray-400">
                 {formatDuration(currentSong.duration)}
               </span>
-              {isHost && (
-                <button
-                  onClick={() => onPlayPause(currentSong)}
-                  className="w-8 h-8 bg-purple-600 hover:bg-purple-700 rounded-full flex items-center justify-center text-sm transition-colors"
-                >
-                  ⏸️
-                </button>
-              )}
             </div>
           </div>
         </div>
@@ -223,7 +207,6 @@ const Queue = ({ queue, currentSong, isHost, onReorder, onPlayPause }) => {
                 song={song}
                 index={index}
                 isHost={isHost}
-                onPlayPause={onPlayPause}
                 formatDuration={formatDuration}
                 isDragging={activeId === song.id}
               />
@@ -232,12 +215,20 @@ const Queue = ({ queue, currentSong, isHost, onReorder, onPlayPause }) => {
         </SortableContext>
       </DndContext>
 
-      {/* Host/Guest Info */}
-      {!isHost && queue.length > 0 && (
-        <div className="mt-6 p-3 bg-gray-800 rounded-lg text-center">
-          <p className="text-sm text-gray-400">
-            Only the host can reorder the queue and control playback
+      {/* Usage Info */}
+      {queue.length > 0 && (
+        <div className="mt-6 p-3 bg-gray-800 rounded-lg">
+          <p className="text-sm text-gray-400 text-center mb-2">
+            💡 <strong>How to play songs:</strong>
           </p>
+          <p className="text-sm text-gray-400 text-center">
+            Go to the <strong>Player</strong> tab and click Play to start the first song in the queue
+          </p>
+          {!isHost && (
+            <p className="text-sm text-gray-500 text-center mt-2">
+              Only the host can reorder the queue and control playback
+            </p>
+          )}
         </div>
       )}
     </div>
