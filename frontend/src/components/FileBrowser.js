@@ -29,8 +29,7 @@ const FileBrowser = ({ onAddToQueue }) => {
 
     try {
       const token = loadMore ? pageToken : null;
-      const folder = currentFolder === 'root' ? null : currentFolder;
-      const response = await getDriveFiles(folder, token);
+      const response = await getDriveFiles(currentFolder, token);
       
       if (loadMore) {
         setFiles(prev => [...prev, ...response.files]);
@@ -62,7 +61,7 @@ const FileBrowser = ({ onAddToQueue }) => {
   const checkConnection = async () => {
     try {
       // Test if the shared folder is accessible by trying to load files
-      await getDriveFiles(null); // Use null for shared folder instead of undefined
+      await getDriveFiles();
       setIsConnected(true);
       setConnectionError('');
     } catch (err) {
@@ -241,39 +240,6 @@ const FileBrowser = ({ onAddToQueue }) => {
           </button>
         )}
         
-        {/* Search suggestions */}
-        {!isSearching && !searchQuery && (
-          <div className="mt-2 text-xs text-gray-500">
-            <span className="mr-2">💡 Try searching for:</span>
-                         <button
-               onClick={() => {
-                 setSearchQuery('.mp3');
-                 setTimeout(() => handleSearch(), 100);
-               }}
-               className="text-purple-400 hover:text-purple-300 mr-3"
-             >
-               .mp3
-             </button>
-             <button
-               onClick={() => {
-                 setSearchQuery('new');
-                 setTimeout(() => handleSearch(), 100);
-               }}
-               className="text-purple-400 hover:text-purple-300 mr-3"
-             >
-               new
-             </button>
-             <button
-               onClick={() => {
-                 setSearchQuery('remix');
-                 setTimeout(() => handleSearch(), 100);
-               }}
-               className="text-purple-400 hover:text-purple-300"
-             >
-               remix
-             </button>
-          </div>
-        )}
       </div>
 
       {/* Breadcrumb Navigation */}
