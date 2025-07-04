@@ -126,14 +126,18 @@ const FileBrowser = ({ onAddToQueue }) => {
     
     let addedToQueue = false;
     
+    console.log('Attempting to load metadata for:', file.name);
+    
     // Pre-load audio metadata to get duration
     const audio = new Audio();
     audio.preload = 'metadata';
     audio.src = `/api/drive/stream/${file.id}`;
     
     audio.addEventListener('loadedmetadata', () => {
+      console.log('Metadata loaded for:', file.name, 'Duration:', audio.duration);
       if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
         song.duration = audio.duration;
+        console.log('Duration set to:', song.duration);
       }
       // Add to queue after metadata loads
       if (!addedToQueue) {
@@ -142,7 +146,8 @@ const FileBrowser = ({ onAddToQueue }) => {
       }
     });
     
-    audio.addEventListener('error', () => {
+    audio.addEventListener('error', (error) => {
+      console.log('Error loading metadata for:', file.name, error);
       // If metadata loading fails, add to queue without duration
       if (!addedToQueue) {
         addedToQueue = true;
@@ -153,6 +158,7 @@ const FileBrowser = ({ onAddToQueue }) => {
     // Set a timeout to add to queue even if metadata doesn't load
     setTimeout(() => {
       if (!addedToQueue) {
+        console.log('Timeout reached, adding to queue without duration:', file.name);
         addedToQueue = true;
         onAddToQueue(song);
       }
