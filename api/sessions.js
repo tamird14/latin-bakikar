@@ -4,6 +4,9 @@ const sessions = new Map();
 // Store client connections for each session with timestamps
 const sessionClients = new Map();
 
+// Store session names persistently using a simpler approach
+// We'll encode the session name in the session updates to preserve it
+
 // Client heartbeat timeout (if no activity for 10 seconds, remove client)
 const CLIENT_TIMEOUT = 10000;
 
@@ -109,11 +112,11 @@ module.exports = function handler(req, res) {
         return;
       }
       
-      // If not in memory, create a default session with a better name
-      // In production, this would query a database
+      // If not in memory, create a basic session with a generic name
+      // The frontend should handle preserving the original name
       const defaultSession = {
         id: sessionId,
-        name: `Session ${sessionId}`, // Better default name
+        name: 'Music Session', // Generic name that frontend can override
         currentSong: null,
         queue: [],
         isPlaying: false,
@@ -145,7 +148,7 @@ module.exports = function handler(req, res) {
           // Create session if it doesn't exist
           session = {
             id: sessionId,
-            name: `Session ${sessionId}`,
+            name: req.body.name || 'Music Session', // Use provided name or default
             currentSong: null,
             queue: [],
             isPlaying: false,
@@ -199,6 +202,11 @@ module.exports = function handler(req, res) {
           console.log('🎵 Updated playing state:', session.isPlaying);
         }
         
+        if (req.body.name !== undefined) {
+          session.name = req.body.name;
+          console.log('📝 Updated session name:', session.name);
+        }
+        
         session.lastUpdate = Date.now();
         sessions.set(sessionId, session);
         
@@ -237,7 +245,7 @@ module.exports = function handler(req, res) {
         };
         
         sessions.set(sessionId, session);
-        console.log('✅ Session created successfully:', sessionId);
+        console.log('✅ Session created successfully:', sessionId, 'with name:', sessionName);
         res.json({ sessionId, message: 'Session created successfully' });
       } catch (error) {
         console.error('❌ Error creating session:', error);

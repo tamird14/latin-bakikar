@@ -111,7 +111,12 @@ export const SocketProvider = ({ children }) => {
         switch (event) {
           case 'joinSession':
             console.log('🏠 Client joining session:', sessionId, 'with client ID:', clientId);
-            updateSession(sessionId, { action: 'join', clientId });
+            const joinUpdate = { action: 'join', clientId };
+            if (data.name) {
+              joinUpdate.name = data.name;
+              console.log('📝 Preserving session name:', data.name);
+            }
+            updateSession(sessionId, joinUpdate);
             // Start polling only if not already polling
             if (!pollInterval.current) {
               pollInterval.current = setInterval(() => pollSession(sessionId), 2000);

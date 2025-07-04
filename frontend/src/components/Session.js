@@ -16,6 +16,7 @@ const Session = () => {
   
   const [session, setSession] = useState(null);
   const [isHost, setIsHost] = useState(searchParams.get('host') === 'true'); // eslint-disable-line no-unused-vars
+  const [originalSessionName, setOriginalSessionName] = useState(null);
   const [currentSong, setCurrentSong] = useState(null);
   const [queue, setQueue] = useState([]);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -54,6 +55,12 @@ const Session = () => {
         setQueue(sessionData.queue || []);
         setIsPlaying(sessionData.isPlaying);
         setClientCount(sessionData.clientCount);
+        
+        // Store the original session name if this is the first load
+        if (!originalSessionName && sessionData.name && sessionData.name !== 'Music Session') {
+          setOriginalSessionName(sessionData.name);
+        }
+        
         setLoading(false);
       } catch (err) {
         setError('Session not found');
@@ -73,8 +80,12 @@ const Session = () => {
       // Set session ID for socket sync
       socket.setSessionId(sessionId);
       
-      // Join session
-      socket.emit('joinSession', { sessionId });
+      // Join session with name preservation
+      const joinData = { sessionId };
+      if (originalSessionName) {
+        joinData.name = originalSessionName;
+      }
+      socket.emit('joinSession', joinData);
       
       // Listen for sync events
       socket.on('queueUpdated', (newQueue) => {
