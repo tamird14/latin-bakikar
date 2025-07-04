@@ -20,6 +20,7 @@ const Session = () => {
     // Try to get stored session name from localStorage
     return localStorage.getItem(`session_name_${sessionId}`) || null;
   });
+  const originalSessionNameRef = useRef(originalSessionName);
   const [currentSong, setCurrentSong] = useState(null);
   const [queue, setQueue] = useState([]);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -39,10 +40,11 @@ const Session = () => {
   // Ref to track current song for socket comparisons
   const currentSongRef = useRef(null);
 
-  // Update ref when currentSong changes
+  // Update refs when values change
   useEffect(() => {
     currentSongRef.current = currentSong;
-  }, [currentSong]);
+    originalSessionNameRef.current = originalSessionName;
+  }, [currentSong, originalSessionName]);
 
   // Load session data
   useEffect(() => {
@@ -92,8 +94,8 @@ const Session = () => {
       
       // Join session with name preservation
       const joinData = { sessionId };
-      if (originalSessionName) {
-        joinData.name = originalSessionName;
+      if (originalSessionNameRef.current) {
+        joinData.name = originalSessionNameRef.current;
       }
       socket.emit('joinSession', joinData);
       
