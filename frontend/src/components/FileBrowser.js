@@ -96,6 +96,11 @@ const FileBrowser = ({ onAddToQueue }) => {
       const response = await searchMusicFiles(searchQuery, currentFolder);
       setFiles(response.files);
       setHasMoreFiles(false);
+      
+      // Show helpful message if no results found
+      if (response.files.length === 0) {
+        setError(`No songs found for "${searchQuery}". Try searching for artist names, song titles, or file extensions like ".mp3"`);
+      }
     } catch (err) {
       setError('Search failed. Please try again.');
       console.error('Search failed:', err);
@@ -203,7 +208,7 @@ const FileBrowser = ({ onAddToQueue }) => {
         <div className="flex space-x-2">
           <input
             type="text"
-            placeholder="Search for songs..."
+            placeholder="Search songs by name, artist, or try '.mp3' for all songs..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
@@ -229,6 +234,40 @@ const FileBrowser = ({ onAddToQueue }) => {
           >
             ← Back to folder view
           </button>
+        )}
+        
+        {/* Search suggestions */}
+        {!isSearching && !searchQuery && (
+          <div className="mt-2 text-xs text-gray-500">
+            <span className="mr-2">💡 Try searching for:</span>
+                         <button
+               onClick={() => {
+                 setSearchQuery('.mp3');
+                 setTimeout(() => handleSearch(), 100);
+               }}
+               className="text-purple-400 hover:text-purple-300 mr-3"
+             >
+               .mp3
+             </button>
+             <button
+               onClick={() => {
+                 setSearchQuery('new');
+                 setTimeout(() => handleSearch(), 100);
+               }}
+               className="text-purple-400 hover:text-purple-300 mr-3"
+             >
+               new
+             </button>
+             <button
+               onClick={() => {
+                 setSearchQuery('remix');
+                 setTimeout(() => handleSearch(), 100);
+               }}
+               className="text-purple-400 hover:text-purple-300"
+             >
+               remix
+             </button>
+          </div>
         )}
       </div>
 

@@ -177,9 +177,16 @@ class GoogleDriveService {
       
       // Client-side filtering with case-insensitive partial match
       const queryLower = query.toLowerCase();
-      const musicFiles = allMusicFiles.filter(file => 
-        file.name.toLowerCase().includes(queryLower)
-      );
+      const musicFiles = allMusicFiles.filter(file => {
+        const fileName = file.name.toLowerCase();
+        
+        // Split query into words for better matching
+        const queryWords = queryLower.split(' ').filter(word => word.length > 0);
+        
+        // Check if any word in the query matches the filename
+        return queryWords.some(word => fileName.includes(word)) || 
+               fileName.includes(queryLower); // Also check the full query
+      });
       
       console.log('🔍 Music files matching query:', musicFiles.length);
       
