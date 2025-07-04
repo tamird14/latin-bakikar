@@ -120,11 +120,43 @@ const FileBrowser = ({ onAddToQueue }) => {
       id: file.id,
       name: file.name.replace(/\.[^/.]+$/, ''), // Remove file extension
       artists: ['Unknown Artist'], // Could be parsed from filename or metadata
-      duration: null, // Would need to be fetched from metadata
+      duration: null, // Will be populated after metadata loads
       fileId: file.id
     };
     
-    onAddToQueue(song);
+    let addedToQueue = false;
+    
+    // Pre-load audio metadata to get duration
+    const audio = new Audio();
+    audio.preload = 'metadata';
+    audio.src = `/api/drive/stream/${file.id}`;
+    
+    audio.addEventListener('loadedmetadata', () => {
+      if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
+        song.duration = audio.duration;
+      }
+      // Add to queue after metadata loads
+      if (!addedToQueue) {
+        addedToQueue = true;
+        onAddToQueue(song);
+      }
+    });
+    
+    audio.addEventListener('error', () => {
+      // If metadata loading fails, add to queue without duration
+      if (!addedToQueue) {
+        addedToQueue = true;
+        onAddToQueue(song);
+      }
+    });
+    
+    // Set a timeout to add to queue even if metadata doesn't load
+    setTimeout(() => {
+      if (!addedToQueue) {
+        addedToQueue = true;
+        onAddToQueue(song);
+      }
+    }, 5000); // 5 second timeout
   };
 
   const isAudioFile = (file) => {
