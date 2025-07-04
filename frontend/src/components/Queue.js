@@ -4,8 +4,10 @@ import {
   closestCenter,
   KeyboardSensor,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
+  DragOverlay,
 } from '@dnd-kit/core';
 import {
   arrayMove,
@@ -38,7 +40,8 @@ const SortableQueueItem = ({
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isSortableDragging ? 0.5 : 1,
+    opacity: isSortableDragging ? 0.3 : 1,
+    zIndex: isSortableDragging ? 999 : 'auto',
   };
 
   return (
@@ -47,7 +50,7 @@ const SortableQueueItem = ({
       style={style}
       className={`bg-gray-800 rounded-lg p-4 transition-all duration-200 ${
         isSortableDragging
-          ? 'shadow-2xl rotate-2 bg-gray-700 z-50'
+          ? 'shadow-lg bg-gray-700 scale-[0.98]'
           : 'hover:bg-gray-750'
       }`}
     >
@@ -57,7 +60,8 @@ const SortableQueueItem = ({
           <div
             {...attributes}
             {...listeners}
-            className="text-gray-500 hover:text-gray-300 cursor-grab active:cursor-grabbing touch-none"
+            className="text-gray-500 hover:text-gray-300 cursor-grab active:cursor-grabbing touch-none p-2 -m-2 rounded-md hover:bg-gray-700"
+            style={{ touchAction: 'none' }}
           >
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
               <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path>
@@ -98,11 +102,18 @@ const SortableQueueItem = ({
 
 const Queue = ({ queue, currentSong, isHost, onReorder }) => {
   const [activeId, setActiveId] = useState(null);
+  const [activeItem, setActiveItem] = useState(null);
   
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
         distance: 8,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 100,
+        tolerance: 5,
       },
     }),
     useSensor(KeyboardSensor, {
@@ -112,6 +123,8 @@ const Queue = ({ queue, currentSong, isHost, onReorder }) => {
 
   const handleDragStart = (event) => {
     setActiveId(event.active.id);
+    const item = queue.find(song => song.id === event.active.id);
+    setActiveItem(item);
   };
 
   const handleDragEnd = (event) => {
@@ -128,6 +141,7 @@ const Queue = ({ queue, currentSong, isHost, onReorder }) => {
     }
 
     setActiveId(null);
+    setActiveItem(null);
   };
 
   const formatDuration = (duration) => {
@@ -155,7 +169,7 @@ const Queue = ({ queue, currentSong, isHost, onReorder }) => {
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-2xl mx-auto" style={{ touchAction: 'pan-y' }}>
       {/* Currently Playing */}
       {currentSong && (
         <div className="bg-gray-800 rounded-lg p-4 mb-4 border-l-4 border-purple-500">
@@ -201,7 +215,7 @@ const Queue = ({ queue, currentSong, isHost, onReorder }) => {
             strategy={verticalListSortingStrategy}
             disabled={!isHost}
           >
-            <div className="space-y-2">
+            <div className="space-y-2 touch-none">
               {queue.map((song, index) => (
                 <SortableQueueItem
                   key={song.id}
@@ -214,6 +228,30 @@ const Queue = ({ queue, currentSong, isHost, onReorder }) => {
               ))}
             </div>
           </SortableContext>
+          <DragOverlay adjustScale={false}>
+            {activeItem && (
+              <div className="bg-gray-700 rounded-lg p-4 shadow-2xl border border-gray-600 transform rotate-2 opacity-95">
+                <div className="flex items-center space-x-4">
+                  <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center text-sm font-medium text-gray-300">
+                    {queue.findIndex(song => song.id === activeItem.id) + 1}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-white truncate">
+                      {activeItem.name}
+                    </p>
+                    <p className="text-sm text-gray-400 truncate">
+                      {activeItem.artists?.join(', ') || 'Unknown Artist'}
+                    </p>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <span className="text-sm text-gray-400">
+                      {formatDuration(activeItem.duration)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </DragOverlay>
         </DndContext>
       ) : (
         <div className="text-center py-8 text-gray-400">
