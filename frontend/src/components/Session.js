@@ -20,7 +20,7 @@ const Session = () => {
     // Try to get stored session name from localStorage
     return localStorage.getItem(`session_name_${sessionId}`) || null;
   });
-  const originalSessionNameRef = useRef(originalSessionName);
+  const originalSessionNameRef = useRef(localStorage.getItem(`session_name_${sessionId}`) || null);
   const [currentSong, setCurrentSong] = useState(null);
   const [queue, setQueue] = useState([]);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -63,13 +63,13 @@ const Session = () => {
         
         // Store the original session name if this is the first load
         if (sessionData.name && sessionData.name !== 'Music Session') {
-          if (!originalSessionName) {
+          if (!originalSessionNameRef.current) {
             setOriginalSessionName(sessionData.name);
             localStorage.setItem(`session_name_${sessionId}`, sessionData.name);
           }
           // Always use the stored original name if available
-          if (originalSessionName && sessionData.name === 'Music Session') {
-            sessionData.name = originalSessionName;
+          if (originalSessionNameRef.current && sessionData.name === 'Music Session') {
+            sessionData.name = originalSessionNameRef.current;
           }
         }
         
