@@ -40,12 +40,14 @@ const Session = () => {
   
   // Ref to track current song for socket comparisons
   const currentSongRef = useRef(null);
+  const songDurationsRef = useRef({});
 
   // Update refs when values change
   useEffect(() => {
     currentSongRef.current = currentSong;
     originalSessionNameRef.current = originalSessionName;
-  }, [currentSong, originalSessionName]);
+    songDurationsRef.current = songDurations;
+  }, [currentSong, originalSessionName, songDurations]);
 
   // Load session data
   useEffect(() => {
@@ -61,8 +63,8 @@ const Session = () => {
         
         // Apply stored durations to queue items
         const queueWithDurations = (sessionData.queue || []).map(song => 
-          songDurations[song.id] && !song.duration 
-            ? { ...song, duration: songDurations[song.id] }
+          songDurationsRef.current[song.id] && !song.duration 
+            ? { ...song, duration: songDurationsRef.current[song.id] }
             : song
         );
         setQueue(queueWithDurations);
@@ -161,8 +163,8 @@ const Session = () => {
     console.log('🎵 Adding to queue:', song);
     
     // Check if we have stored duration for this song
-    const songWithDuration = songDurations[song.id] 
-      ? { ...song, duration: songDurations[song.id] }
+    const songWithDuration = songDurationsRef.current[song.id] 
+      ? { ...song, duration: songDurationsRef.current[song.id] }
       : song;
     
     const newQueue = [...queue, songWithDuration];
