@@ -36,6 +36,7 @@ const Session = () => {
   const [volume, setVolume] = useState(1);
   const [seekTime, setSeekTime] = useState(null);
   const [toastMessage, setToastMessage] = useState('');
+  const [songDurations, setSongDurations] = useState({}); // Store durations for songs
   
   // Ref to track current song for socket comparisons
   const currentSongRef = useRef(null);
@@ -57,7 +58,15 @@ const Session = () => {
         console.log('👥 Initial client count:', sessionData.clientCount);
         setSession(sessionData);
         setCurrentSong(sessionData.currentSong);
-        setQueue(sessionData.queue || []);
+        
+        // Apply stored durations to queue items
+        const queueWithDurations = (sessionData.queue || []).map(song => 
+          songDurations[song.id] && !song.duration 
+            ? { ...song, duration: songDurations[song.id] }
+            : song
+        );
+        setQueue(queueWithDurations);
+        
         setIsPlaying(sessionData.isPlaying);
         setClientCount(sessionData.clientCount);
         
@@ -135,9 +144,28 @@ const Session = () => {
     }
   }, [sessionData]);
 
+  // Update queue items with stored durations when durations change
+  useEffect(() => {
+    if (Object.keys(songDurations).length > 0) {
+      setQueue(prevQueue => 
+        prevQueue.map(song => 
+          songDurations[song.id] && !song.duration 
+            ? { ...song, duration: songDurations[song.id] }
+            : song
+        )
+      );
+    }
+  }, [songDurations]);
+
   const handleAddToQueue = (song) => {
     console.log('🎵 Adding to queue:', song);
-    const newQueue = [...queue, song];
+    
+    // Check if we have stored duration for this song
+    const songWithDuration = songDurations[song.id] 
+      ? { ...song, duration: songDurations[song.id] }
+      : song;
+    
+    const newQueue = [...queue, songWithDuration];
     setQueue(newQueue);
     
     // Show confirmation toast
@@ -266,6 +294,23 @@ const Session = () => {
 
   const handleDurationChange = (newDuration) => {
     setDuration(newDuration);
+    
+    // Store duration for future reference
+    if (currentSong && newDuration > 0) {
+      setSongDurations(prevDurations => ({
+        ...prevDurations,
+        [currentSong.id]: newDuration
+      }));
+      
+      // Update the current song in the queue with the duration if it doesn't have one
+      setQueue(prevQueue => 
+        prevQueue.map(song => 
+          song.id === currentSong.id && !song.duration 
+            ? { ...song, duration: newDuration }
+            : song
+        )
+      );
+    }
   };
 
   const handleAudioError = (errorMessage) => {
