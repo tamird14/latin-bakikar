@@ -29,7 +29,8 @@ const FileBrowser = ({ onAddToQueue }) => {
 
     try {
       const token = loadMore ? pageToken : null;
-      const response = await getDriveFiles(currentFolder, token);
+      const folder = currentFolder === 'root' ? null : currentFolder;
+      const response = await getDriveFiles(folder, token);
       
       if (loadMore) {
         setFiles(prev => [...prev, ...response.files]);
@@ -61,7 +62,7 @@ const FileBrowser = ({ onAddToQueue }) => {
   const checkConnection = async () => {
     try {
       // Test if the shared folder is accessible by trying to load files
-      await getDriveFiles();
+      await getDriveFiles(null); // Use null for shared folder instead of undefined
       setIsConnected(true);
       setConnectionError('');
     } catch (err) {
@@ -93,17 +94,21 @@ const FileBrowser = ({ onAddToQueue }) => {
     setError('');
 
     try {
-      const response = await searchMusicFiles(searchQuery, currentFolder);
+      const searchFolder = currentFolder === 'root' ? null : currentFolder;
+      const response = await searchMusicFiles(searchQuery, searchFolder);
+      
       setFiles(response.files);
       setHasMoreFiles(false);
       
       // Show helpful message if no results found
       if (response.files.length === 0) {
         setError(`No songs found for "${searchQuery}". Try searching for artist names, song titles, or file extensions like ".mp3"`);
+      } else {
+        setError('');
       }
     } catch (err) {
-      setError('Search failed. Please try again.');
       console.error('Search failed:', err);
+      setError('Search failed. Please try again.');
     } finally {
       setLoading(false);
     }
