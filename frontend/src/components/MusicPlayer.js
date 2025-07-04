@@ -55,7 +55,7 @@ const MusicPlayer = ({
             <p className="text-lg mb-2">Ready to play</p>
             <p className="text-sm mb-6">{queue.length} song{queue.length > 1 ? 's' : ''} in queue</p>
             
-            {/* Play button to start queue */}
+            {/* Play button to start queue - Only for hosts */}
             {isHost && (
               <button
                 onClick={() => onPlayPause()}
@@ -69,7 +69,7 @@ const MusicPlayer = ({
             {!isHost && (
               <div className="mt-4 p-3 bg-gray-800 rounded-lg text-center">
                 <p className="text-sm text-gray-400">
-                  Only the host can start playback
+                  🎧 Waiting for host to start the music
                 </p>
               </div>
             )}
@@ -115,7 +115,7 @@ const MusicPlayer = ({
       <div className="mb-6">
         <div 
           className={`w-full h-2 bg-gray-700 rounded-full ${isHost ? 'cursor-pointer' : 'cursor-default'}`}
-          onClick={handleSeek}
+          onClick={isHost ? handleSeek : undefined}
         >
           <div 
             className="h-full bg-purple-500 rounded-full transition-all duration-200 pointer-events-none"
@@ -131,61 +131,62 @@ const MusicPlayer = ({
         </div>
       </div>
 
-      {/* Controls */}
-      <div className="flex items-center justify-center space-x-4 mb-6">
-        <button
-          onClick={onStop}
-          disabled={!isHost}
-          className="w-12 h-12 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-600 rounded-full flex items-center justify-center transition-colors"
-          title="Stop (restart from beginning)"
-        >
-          ⏹️
-        </button>
-        
-        <button
-          onClick={() => onPlayPause(currentSong)}
-          disabled={!isHost}
-          className="w-16 h-16 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:text-gray-500 rounded-full flex items-center justify-center text-2xl transition-colors"
-          title={isPlaying ? "Pause" : "Play"}
-        >
-          {isPlaying ? '⏸️' : '▶️'}
-        </button>
-        
-        <button
-          onClick={onNext}
-          disabled={!isHost}
-          className="w-12 h-12 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-600 rounded-full flex items-center justify-center transition-colors"
-          title="Next song"
-        >
-          ⏭️
-        </button>
-      </div>
+      {/* Controls - Only show for hosts */}
+      {isHost && (
+        <>
+          <div className="flex items-center justify-center space-x-4 mb-6">
+            <button
+              onClick={onStop}
+              className="w-12 h-12 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center transition-colors"
+              title="Stop (restart from beginning)"
+            >
+              ⏹️
+            </button>
+            
+            <button
+              onClick={() => onPlayPause(currentSong)}
+              className="w-16 h-16 bg-purple-600 hover:bg-purple-700 rounded-full flex items-center justify-center text-2xl transition-colors"
+              title={isPlaying ? "Pause" : "Play"}
+            >
+              {isPlaying ? '⏸️' : '▶️'}
+            </button>
+            
+            <button
+              onClick={onNext}
+              className="w-12 h-12 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center transition-colors"
+              title="Next song"
+            >
+              ⏭️
+            </button>
+          </div>
 
-      {/* Volume Control */}
-      <div className="flex items-center space-x-3">
-        <span className="text-sm">🔊</span>
-        <input
-          type="range"
-          min="0"
-          max="1"
-          step="0.01"
-          value={volume || 1}
-          onChange={handleVolumeChange}
-          className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
-        />
-        <span className="text-sm text-gray-400 w-8">
-          {Math.round((volume || 1) * 100)}%
-        </span>
-      </div>
+          {/* Volume Control */}
+          <div className="flex items-center space-x-3">
+            <span className="text-sm">🔊</span>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={volume || 1}
+              onChange={handleVolumeChange}
+              className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
+            />
+            <span className="text-sm text-gray-400 w-8">
+              {Math.round((volume || 1) * 100)}%
+            </span>
+          </div>
+        </>
+      )}
 
       {/* Host/Guest Info */}
       {!isHost && (
         <div className="mt-6 p-3 bg-gray-800 rounded-lg text-center">
           <p className="text-sm text-gray-400 mb-1">
-            🎧 You're listening to the host's music
+            🎧 Listening to host's music
           </p>
           <p className="text-xs text-gray-500">
-            Only the host can control playback
+            Enjoying the synchronized experience
           </p>
         </div>
       )}
