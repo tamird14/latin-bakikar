@@ -137,7 +137,7 @@ const Queue = ({ queue, currentSong, isHost, onReorder }) => {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  if (queue.length === 0) {
+  if (queue.length === 0 && !currentSong) {
     return (
       <div className="flex flex-col items-center justify-center h-96 text-gray-400">
         <div className="w-24 h-24 bg-gray-700 rounded-full flex items-center justify-center mb-4">
@@ -188,32 +188,42 @@ const Queue = ({ queue, currentSong, isHost, onReorder }) => {
         )}
       </div>
 
-      {/* Queue List */}
-      <DndContext 
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-      >
-        <SortableContext 
-          items={queue.map(song => song.id)}
-          strategy={verticalListSortingStrategy}
-          disabled={!isHost}
+      {/* Queue List or Empty State */}
+      {queue.length > 0 ? (
+        <DndContext 
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
         >
-          <div className="space-y-2">
-            {queue.map((song, index) => (
-              <SortableQueueItem
-                key={song.id}
-                song={song}
-                index={index}
-                isHost={isHost}
-                formatDuration={formatDuration}
-                isDragging={activeId === song.id}
-              />
-            ))}
+          <SortableContext 
+            items={queue.map(song => song.id)}
+            strategy={verticalListSortingStrategy}
+            disabled={!isHost}
+          >
+            <div className="space-y-2">
+              {queue.map((song, index) => (
+                <SortableQueueItem
+                  key={song.id}
+                  song={song}
+                  index={index}
+                  isHost={isHost}
+                  formatDuration={formatDuration}
+                  isDragging={activeId === song.id}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
+      ) : (
+        <div className="text-center py-8 text-gray-400">
+          <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-3">
+            <span className="text-2xl">📝</span>
           </div>
-        </SortableContext>
-      </DndContext>
+          <p className="text-lg mb-2">No songs queued</p>
+          <p className="text-sm">Add songs to continue listening</p>
+        </div>
+      )}
 
       {/* Usage Info */}
       {queue.length > 0 && (
