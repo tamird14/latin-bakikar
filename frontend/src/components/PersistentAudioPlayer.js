@@ -19,6 +19,12 @@ const PersistentAudioPlayer = ({
   const [isReady, setIsReady] = useState(false);
   const lastPlayAttempt = useRef(0);
   const isSeekingRef = useRef(false);
+  const progressCheckInterval = useRef(null);
+  const lastKnownTime = useRef(0);
+  const lastKnownDuration = useRef(0);
+  
+  // Detect iOS
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
   
   // Use refs to avoid stale closures
   const currentSongRef = useRef(currentSong);
@@ -88,7 +94,9 @@ const PersistentAudioPlayer = ({
       if (now - lastPlayAttempt.current > 500) { // Prevent rapid play attempts
         console.log('▶️ Attempting to play audio (ready and paused)');
         lastPlayAttempt.current = now;
-        audioRef.current.play().catch(err => {
+        audioRef.current.play().then(() => {
+          startProgressCheck(); // Start iOS backup check when playing
+        }).catch(err => {
           console.error('Failed to play audio:', err);
           onErrorRef.current?.('Failed to play audio - ' + err.message);
         });
@@ -98,12 +106,15 @@ const PersistentAudioPlayer = ({
     } else if (!isPlaying && !audioRef.current.paused) {
       console.log('⏸️ Pausing audio via state change');
       audioRef.current.pause();
+      stopProgressCheck(); // Stop iOS backup check when pausing
     } else if (isPlaying && isReady && !audioRef.current.paused) {
       console.log('✅ Audio already playing, no action needed');
+      startProgressCheck(); // Ensure iOS backup check is running
     } else if (isPlaying && !isReady) {
       console.log('⏳ Audio not ready yet, waiting...');
     } else if (!isPlaying && audioRef.current.paused) {
       console.log('✅ Audio already paused, no action needed');
+      stopProgressCheck(); // Ensure iOS backup check is stopped
     }
   }, [isPlaying, isReady, currentSrc, currentSong, currentTime]);
 
@@ -115,6 +126,7 @@ const PersistentAudioPlayer = ({
     if (!currentSong || !audioRef.current) {
       if (currentSrc) {
         console.log('Clearing current song');
+        stopProgressCheck(); // Stop iOS backup check when clearing song
         // Properly stop and clear audio element
         if (audioRef.current) {
           audioRef.current.pause();
@@ -150,6 +162,7 @@ const PersistentAudioPlayer = ({
 
     const loadSong = async () => {
       loadingRef.current = true; // Mark as loading
+      stopProgressCheck(); // Stop iOS backup check when loading new song
       
       try {
         // Immediately stop current playback and reset state
@@ -258,6 +271,8 @@ const PersistentAudioPlayer = ({
 
   const handleTimeUpdate = () => {
     if (audioRef.current) {
+      lastKnownTime.current = audioRef.current.currentTime;
+      lastKnownDuration.current = audioRef.current.duration || 0;
       onTimeUpdateRef.current?.(audioRef.current.currentTime);
     }
   };
@@ -275,8 +290,70 @@ const PersistentAudioPlayer = ({
     }, 100);
   };
 
+  // iOS backup system for song progression
+  const checkSongProgress = () => {
+    if (!audioRef.current || !currentSongRef.current || !isPlayingRef.current) {
+      return;
+    }
+
+    const currentTime = audioRef.current.currentTime;
+    const duration = audioRef.current.duration;
+    
+    // If song should have ended (within 1 second of duration), trigger next song
+    if (duration > 0 && currentTime >= duration - 1) {
+      console.log('🍎 iOS: Song ending detected via backup timer');
+      clearInterval(progressCheckInterval.current);
+      progressCheckInterval.current = null;
+      handleEnded();
+    }
+  };
+
+  const startProgressCheck = () => {
+    if (isIOS && !progressCheckInterval.current) {
+      console.log('🍎 iOS: Starting backup progress check');
+      progressCheckInterval.current = setInterval(checkSongProgress, 1000);
+    }
+  };
+
+  const stopProgressCheck = () => {
+    if (progressCheckInterval.current) {
+      console.log('🍎 iOS: Stopping backup progress check');
+      clearInterval(progressCheckInterval.current);
+      progressCheckInterval.current = null;
+    }
+  };
+
+  // Handle Page Visibility API for iOS background support
+  useEffect(() => {
+    if (!isIOS) return;
+    
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        console.log('🍎 iOS: Page hidden, stopping progress check');
+        stopProgressCheck();
+      } else {
+        console.log('🍎 iOS: Page visible, checking if should resume progress check');
+        // Only restart if audio is playing
+        if (audioRef.current && !audioRef.current.paused && isPlayingRef.current) {
+          startProgressCheck();
+          // Check immediately in case song ended while in background
+          setTimeout(checkSongProgress, 100);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      stopProgressCheck(); // Cleanup on unmount
+    };
+  }, []);
+
   const handleEnded = () => {
     console.log('🎵 Song ended, moving to next');
+    stopProgressCheck(); // Stop iOS backup check
+    
     // Immediately pause to prevent any restart
     if (audioRef.current) {
       audioRef.current.pause();
