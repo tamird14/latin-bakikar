@@ -16,7 +16,10 @@ const Session = () => {
   
   const [session, setSession] = useState(null);
   const [isHost, setIsHost] = useState(searchParams.get('host') === 'true'); // eslint-disable-line no-unused-vars
-  const [originalSessionName, setOriginalSessionName] = useState(null);
+  const [originalSessionName, setOriginalSessionName] = useState(() => {
+    // Try to get stored session name from localStorage
+    return localStorage.getItem(`session_name_${sessionId}`) || null;
+  });
   const [currentSong, setCurrentSong] = useState(null);
   const [queue, setQueue] = useState([]);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -57,8 +60,15 @@ const Session = () => {
         setClientCount(sessionData.clientCount);
         
         // Store the original session name if this is the first load
-        if (!originalSessionName && sessionData.name && sessionData.name !== 'Music Session') {
-          setOriginalSessionName(sessionData.name);
+        if (sessionData.name && sessionData.name !== 'Music Session') {
+          if (!originalSessionName) {
+            setOriginalSessionName(sessionData.name);
+            localStorage.setItem(`session_name_${sessionId}`, sessionData.name);
+          }
+          // Always use the stored original name if available
+          if (originalSessionName && sessionData.name === 'Music Session') {
+            sessionData.name = originalSessionName;
+          }
         }
         
         setLoading(false);
@@ -333,7 +343,7 @@ const Session = () => {
       <div className="bg-gray-800 border-b border-gray-700 p-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold">{session?.name}</h1>
+            <h1 className="text-xl font-bold">{originalSessionName || session?.name}</h1>
             <div className="flex items-center space-x-4 text-sm text-gray-400">
               <span className="flex items-center">
                 <div className="w-2 h-2 bg-green-500 rounded-full mr-1"></div>

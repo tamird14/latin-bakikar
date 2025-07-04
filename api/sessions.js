@@ -117,7 +117,7 @@ module.exports = function handler(req, res) {
       // The frontend should handle preserving the original name
       const defaultSession = {
         id: sessionId,
-        name: 'Music Session (Fixed)', // Generic name that frontend can override
+        name: 'Music Session', // Generic name that frontend can override
         currentSong: null,
         queue: [],
         isPlaying: false,
