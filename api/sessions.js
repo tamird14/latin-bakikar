@@ -1,4 +1,5 @@
 // Store active sessions (in a real app, you'd use a database)
+// Updated: Force rebuild to fix session name issue
 const sessions = new Map();
 
 // Store client connections for each session with timestamps
@@ -116,7 +117,7 @@ module.exports = function handler(req, res) {
       // The frontend should handle preserving the original name
       const defaultSession = {
         id: sessionId,
-        name: 'Music Session', // Generic name that frontend can override
+        name: 'Music Session (Fixed)', // Generic name that frontend can override
         currentSong: null,
         queue: [],
         isPlaying: false,
