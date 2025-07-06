@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { useSocket } from '../services/SocketContext';
 import { getSession } from '../services/api';
@@ -126,7 +126,39 @@ const Session = () => {
         setIsPlaying(newPlayingState);
       });
       
-      // Cleanup
+      // For guests: Force a session reload after a short delay to get the real state
+      // This helps when the backend's in-memory session state was lost
+      if (!isHost) {
+        const forceSync = setTimeout(async () => {
+          try {
+            console.log('🔄 Guest forcing session sync...');
+            const clientId = socket?.getClientId ? socket.getClientId() : null;
+            const freshSessionData = await getSession(sessionId, clientId);
+            console.log('🔄 Fresh session data for guest:', freshSessionData);
+            
+            if (freshSessionData.currentSong || (freshSessionData.queue && freshSessionData.queue.length > 0)) {
+              console.log('✅ Found real session state, updating...');
+              setCurrentSong(freshSessionData.currentSong);
+              setQueue(freshSessionData.queue || []);
+              setIsPlaying(freshSessionData.isPlaying);
+            }
+          } catch (err) {
+            console.error('❌ Failed to force sync session:', err);
+          }
+        }, 1000); // Wait 1 second after joining
+        
+        // Cleanup timeout
+        return () => {
+          clearTimeout(forceSync);
+          console.log('🧹 Cleaning up session sync for:', sessionId);
+          socket.emit('leaveSession', { sessionId });
+          socket.off('queueUpdated');
+          socket.off('songChanged');
+          socket.off('playbackStateChanged');
+        };
+      }
+      
+      // Cleanup for hosts
       return () => {
         console.log('🧹 Cleaning up session sync for:', sessionId);
         socket.emit('leaveSession', { sessionId });
@@ -136,15 +168,36 @@ const Session = () => {
       };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]); // Only depend on sessionId, not socket to prevent infinite loops
+  }, [sessionId, isHost]); // Add isHost dependency for the guest-specific logic
+
+  // Force republish current state - useful when guests join and might have stale data
+  const republishCurrentState = useCallback(() => {
+    if (isHost && socket) {
+      console.log('📢 Host republishing current state...');
+      if (currentSong) {
+        socket.emit('updateCurrentSong', currentSong);
+      }
+      if (queue && queue.length > 0) {
+        socket.emit('updateQueue', queue);
+      }
+      socket.emit('updatePlaybackState', isPlaying);
+    }
+  }, [isHost, socket, currentSong, queue, isPlaying]);
 
   // Update client count from session data
   useEffect(() => {
     if (sessionData && sessionData.clientCount !== undefined) {
       console.log('👥 Updating client count from session data:', sessionData.clientCount);
+      const previousCount = clientCount;
       setClientCount(sessionData.clientCount);
+      
+      // If we're the host and client count increased, republish state for new guests
+      if (isHost && previousCount > 0 && sessionData.clientCount > previousCount) {
+        console.log('👥 New guest joined, republishing state...');
+        setTimeout(() => republishCurrentState(), 500); // Small delay to ensure guest is ready
+      }
     }
-  }, [sessionData]);
+  }, [sessionData, clientCount, isHost, republishCurrentState]);
 
   // Update queue items with stored durations when durations change
   useEffect(() => {

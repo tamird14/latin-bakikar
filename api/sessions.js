@@ -113,7 +113,32 @@ module.exports = function handler(req, res) {
         return;
       }
       
-      // If not in memory, create a basic session with a generic name
+      // If not in memory, check if we have clients for this session
+      // This might indicate an active session that lost its state
+      const clients = sessionClients.get(sessionId) || new Map();
+      const hasActiveClients = clients.size > 0;
+      
+      if (hasActiveClients) {
+        console.log('⚠️  Session not in memory but has active clients:', clients.size);
+        console.log('📱 This suggests the session state was lost, returning minimal session for sync');
+        
+        // Return a minimal session that indicates it might need sync
+        const minimalSession = {
+          id: sessionId,
+          name: 'Music Session',
+          currentSong: null,
+          queue: [],
+          isPlaying: false,
+          clientCount: clients.size,
+          lastUpdate: Date.now(),
+          needsSync: true // Flag to indicate this might be a stale state
+        };
+        
+        res.json(minimalSession);
+        return;
+      }
+      
+      // If not in memory and no active clients, create a basic session
       // The frontend should handle preserving the original name
       const defaultSession = {
         id: sessionId,
