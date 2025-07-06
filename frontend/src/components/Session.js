@@ -158,7 +158,8 @@ const Session = () => {
       // Listen for sync events
       socket.on('queueUpdated', (newQueue) => {
         console.log('🔄 Queue updated from sync:', newQueue);
-        console.log('🔄 Guest is host:', isHost, 'Current queue:', queue);
+        console.log('🔄 User is host:', isHost, 'Current queue length:', queue.length);
+        console.log('🔄 New queue length:', newQueue?.length || 0);
         setQueue(newQueue || []);
       });
       
@@ -341,7 +342,7 @@ const Session = () => {
   }, []);
 
   const handleAddToQueue = (song) => {
-    console.log('🎵 Adding to queue:', song);
+    console.log('🎵 Adding to queue:', song, 'isHost:', isHost);
     
     // Check if we have stored duration for this song
     const songWithDuration = songDurationsRef.current[song.id] 
@@ -352,11 +353,13 @@ const Session = () => {
     setQueue(newQueue);
     
     // Show confirmation toast
-    setToastMessage(`"${song.name}" added to queue`);
+    const userType = isHost ? 'Host' : 'Guest';
+    setToastMessage(`${userType}: "${song.name}" added to queue`);
     setTimeout(() => setToastMessage(''), 2500);
     
-    // Sync to other devices
+    // Everyone can add to the shared queue, but only host controls playback
     if (socket) {
+      console.log('🎵 Syncing updated queue to all clients');
       socket.emit('updateQueue', newQueue);
     }
   };

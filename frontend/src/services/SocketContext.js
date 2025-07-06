@@ -30,6 +30,8 @@ export const SocketProvider = ({ children }) => {
     return id;
   });
   
+  const lastLocalUpdate = useRef(0);
+  
   const pollInterval = useRef(null);
   const currentSessionId = useRef(null);
   const lastUpdate = useRef(0);
@@ -44,6 +46,10 @@ export const SocketProvider = ({ children }) => {
   const updateSession = useCallback(async (sessionId, updates) => {
     try {
       console.log('🔄 Updating session:', sessionId, 'with updates:', updates);
+      
+      // Mark this as a local update
+      lastLocalUpdate.current = Date.now();
+      
       const response = await fetch(`/api/sessions/${sessionId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -80,8 +86,12 @@ export const SocketProvider = ({ children }) => {
           setSessionData(data);
           lastUpdate.current = data.lastUpdate;
           
-          // Emit events for compatibility with existing code
-          if (mockSocket.current) {
+          // Only emit events if this update didn't originate from this client
+          const timeSinceLocalUpdate = Date.now() - lastLocalUpdate.current;
+          const isLocalUpdate = timeSinceLocalUpdate < 2000; // Within 2 seconds of local update
+          
+          if (!isLocalUpdate && mockSocket.current) {
+            console.log('📡 Emitting sync events (not a local update)');
             if (data.currentSong !== currentData?.currentSong) {
               console.log('📡 Emitting songChanged event');
               mockSocket.current._emit('songChanged', data.currentSong);
@@ -94,6 +104,8 @@ export const SocketProvider = ({ children }) => {
               console.log('📡 Emitting playbackStateChanged event');
               mockSocket.current._emit('playbackStateChanged', data.isPlaying);
             }
+          } else if (isLocalUpdate) {
+            console.log('📡 Skipping event emission - this appears to be from a recent local update');
           }
         } else {
           console.log('📡 No update needed - data is not newer');
@@ -143,7 +155,24 @@ export const SocketProvider = ({ children }) => {
             break;
             
           case 'updateQueue':
-            updateSession(sessionId, { queue: data });
+            console.log('🔄 Emitting queue update, pausing polling briefly to avoid conflicts');
+            // Temporarily pause polling to avoid conflicts
+            const wasPolling = !!pollInterval.current;
+            if (pollInterval.current) {
+              clearInterval(pollInterval.current);
+              pollInterval.current = null;
+            }
+            
+            updateSession(sessionId, { queue: data }).then(() => {
+              // Resume polling after a short delay
+              if (wasPolling) {
+                setTimeout(() => {
+                  if (!pollInterval.current) {
+                    pollInterval.current = setInterval(() => pollSession(sessionId), 1000);
+                  }
+                }, 500);
+              }
+            });
             break;
             
           case 'updateCurrentSong':
