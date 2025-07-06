@@ -128,7 +128,7 @@ export const SocketProvider = ({ children }) => {
             updateSession(sessionId, joinUpdate);
             // Start polling only if not already polling
             if (!pollInterval.current) {
-              pollInterval.current = setInterval(() => pollSession(sessionId), 2000);
+              pollInterval.current = setInterval(() => pollSession(sessionId), 1000);
             }
             break;
             

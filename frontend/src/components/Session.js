@@ -59,17 +59,62 @@ const Session = () => {
         console.log('🔄 Initial session data loaded:', sessionData);
         console.log('👥 Initial client count:', sessionData.clientCount);
         setSession(sessionData);
-        setCurrentSong(sessionData.currentSong);
         
-        // Apply stored durations to queue items
-        const queueWithDurations = (sessionData.queue || []).map(song => 
-          songDurationsRef.current[song.id] && !song.duration 
-            ? { ...song, duration: songDurationsRef.current[song.id] }
-            : song
-        );
-        setQueue(queueWithDurations);
+        // For hosts: Check if we have local backup state and backend is empty
+        if (isHost && (!sessionData.currentSong && (!sessionData.queue || sessionData.queue.length === 0))) {
+          console.log('🏠 Host detected empty backend state - checking for local backup...');
+          
+          // Try to restore from localStorage
+          const localBackup = localStorage.getItem(`session_backup_${sessionId}`);
+          if (localBackup) {
+            try {
+              const backup = JSON.parse(localBackup);
+              console.log('🔄 Restoring host state from local backup:', backup);
+              
+              if (backup.currentSong) {
+                setCurrentSong(backup.currentSong);
+                // Immediately sync to backend
+                if (socket) {
+                  socket.emit('updateCurrentSong', backup.currentSong);
+                }
+              }
+              
+              if (backup.queue && backup.queue.length > 0) {
+                setQueue(backup.queue);
+                // Immediately sync to backend
+                if (socket) {
+                  socket.emit('updateQueue', backup.queue);
+                }
+              }
+              
+              if (backup.isPlaying !== undefined) {
+                setIsPlaying(backup.isPlaying);
+                // Immediately sync to backend
+                if (socket) {
+                  socket.emit('updatePlaybackState', backup.isPlaying);
+                }
+              }
+            } catch (err) {
+              console.error('Failed to parse local backup:', err);
+            }
+          }
+        }
         
-        setIsPlaying(sessionData.isPlaying);
+        // If no local backup or not a host, use server data
+        if (!isHost || !localStorage.getItem(`session_backup_${sessionId}`)) {
+          setCurrentSong(sessionData.currentSong);
+          
+          // Apply stored durations to queue items
+          const queueWithDurations = (sessionData.queue || []).map(song => 
+            songDurationsRef.current[song.id] && !song.duration 
+              ? { ...song, duration: songDurationsRef.current[song.id] }
+              : song
+          );
+          setQueue(queueWithDurations);
+          
+          setIsPlaying(sessionData.isPlaying);
+        }
+        
         setClientCount(sessionData.clientCount);
         
         // Store the original session name if this is the first load
@@ -92,7 +137,7 @@ const Session = () => {
     };
 
     loadSession();
-  }, [sessionId, socket]); // Add socket dependency to get client ID
+  }, [sessionId, socket, isHost]); // Add isHost dependency
 
   // Socket connection and sync - only run once per session
   useEffect(() => {
@@ -129,33 +174,59 @@ const Session = () => {
         setIsPlaying(newPlayingState);
       });
       
-      // For guests: Force a session reload after a short delay to get the real state
+      // For guests: Force a session reload multiple times to get the real state
       // This helps when the backend's in-memory session state was lost
       if (!isHost) {
-        const forceSync = setTimeout(async () => {
+        let syncAttempt = 0;
+        const maxSyncAttempts = 5;
+        const syncTimeouts = [];
+        
+        const attemptSync = async () => {
           try {
-            console.log('🔄 Guest forcing session sync...');
+            syncAttempt++;
+            console.log(`🔄 Guest force sync attempt ${syncAttempt}/${maxSyncAttempts}...`);
             console.log('🔄 Current local state - currentSong:', currentSong, 'queue:', queue);
             
             const clientId = socket?.getClientId ? socket.getClientId() : null;
             const freshSessionData = await getSession(sessionId, clientId);
             console.log('🔄 Fresh session data for guest:', freshSessionData);
             
-            // Always update if we have fresh data, even if our local state is empty
-            if (freshSessionData) {
-              console.log('✅ Updating guest state with fresh data...');
+            // Check if we got real session data (not just empty defaults)
+            const hasRealData = freshSessionData && (
+              freshSessionData.currentSong || 
+              (freshSessionData.queue && freshSessionData.queue.length > 0) ||
+              freshSessionData.needsSync // Backend flag indicating stale state
+            );
+            
+            if (hasRealData) {
+              console.log('✅ Updating guest state with real session data...');
               setCurrentSong(freshSessionData.currentSong);
               setQueue(freshSessionData.queue || []);
               setIsPlaying(freshSessionData.isPlaying);
+            } else if (syncAttempt < maxSyncAttempts) {
+              console.log(`⏳ No real data yet, will retry in ${1000 * syncAttempt}ms...`);
+              const nextTimeout = setTimeout(attemptSync, 1000 * syncAttempt);
+              syncTimeouts.push(nextTimeout);
+            } else {
+              console.log('❌ Max sync attempts reached, giving up');
             }
           } catch (err) {
             console.error('❌ Failed to force sync session:', err);
+            if (syncAttempt < maxSyncAttempts) {
+              console.log(`⏳ Retrying sync in ${1000 * syncAttempt}ms...`);
+              const nextTimeout = setTimeout(attemptSync, 1000 * syncAttempt);
+              syncTimeouts.push(nextTimeout);
+            }
           }
-        }, 1000); // Wait 1 second after joining
+        };
         
-        // Cleanup timeout
+        // Start first sync attempt after 1 second
+        const firstTimeout = setTimeout(attemptSync, 1000);
+        syncTimeouts.push(firstTimeout);
+        
+        // Cleanup all timeouts
         return () => {
-          clearTimeout(forceSync);
+          syncTimeouts.forEach(timeout => clearTimeout(timeout));
           console.log('🧹 Cleaning up session sync for:', sessionId);
           socket.emit('leaveSession', { sessionId });
           socket.off('queueUpdated');
@@ -226,6 +297,48 @@ const Session = () => {
       );
     }
   }, [songDurations]);
+
+  // Backup host state to localStorage
+  useEffect(() => {
+    if (isHost && !loading) {
+      const backupState = {
+        currentSong,
+        queue,
+        isPlaying,
+        timestamp: Date.now()
+      };
+      
+      console.log('💾 Backing up host state to localStorage:', backupState);
+      localStorage.setItem(`session_backup_${sessionId}`, JSON.stringify(backupState));
+    }
+  }, [isHost, currentSong, queue, isPlaying, sessionId, loading]);
+
+  // Clean up old backup data on component mount
+  useEffect(() => {
+    // Clean up backups older than 24 hours
+    const cleanupOldBackups = () => {
+      const now = Date.now();
+      const keys = Object.keys(localStorage);
+      
+      keys.forEach(key => {
+        if (key.startsWith('session_backup_')) {
+          try {
+            const backup = JSON.parse(localStorage.getItem(key));
+            if (backup && backup.timestamp && (now - backup.timestamp) > 24 * 60 * 60 * 1000) {
+              console.log('🧹 Cleaning up old backup:', key);
+              localStorage.removeItem(key);
+            }
+          } catch (err) {
+            // Invalid backup data, remove it
+            console.log('🧹 Removing invalid backup:', key);
+            localStorage.removeItem(key);
+          }
+        }
+      });
+    };
+    
+    cleanupOldBackups();
+  }, []);
 
   const handleAddToQueue = (song) => {
     console.log('🎵 Adding to queue:', song);
