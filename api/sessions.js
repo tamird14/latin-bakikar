@@ -97,11 +97,14 @@ module.exports = function handler(req, res) {
       const existingSession = sessions.get(sessionId);
       if (existingSession) {
         console.log('✅ Found existing session in memory:', existingSession.name);
+        console.log('✅ Session current song:', existingSession.currentSong?.name || 'none');
+        console.log('✅ Session queue length:', existingSession.queue?.length || 0);
+        console.log('✅ Session playing state:', existingSession.isPlaying);
         
         // Update client count from active connections
         const clients = sessionClients.get(sessionId) || new Map();
         
-        res.json({
+        const responseData = {
           id: existingSession.id,
           name: existingSession.name,
           currentSong: existingSession.currentSong,
@@ -109,7 +112,10 @@ module.exports = function handler(req, res) {
           isPlaying: existingSession.isPlaying || false,
           clientCount: clients.size,
           lastUpdate: existingSession.lastUpdate || Date.now()
-        });
+        };
+        
+        console.log('✅ Returning session data - queue length:', responseData.queue.length);
+        res.json(responseData);
         return;
       }
       
@@ -216,6 +222,7 @@ module.exports = function handler(req, res) {
         if (req.body.queue !== undefined) {
           session.queue = req.body.queue;
           console.log('🎵 Updated queue, now has:', session.queue.length, 'songs');
+          console.log('🎵 Queue songs:', session.queue.map(s => s.name).join(', '));
         }
         
         if (req.body.currentSong !== undefined) {

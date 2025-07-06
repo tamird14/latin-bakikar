@@ -70,24 +70,33 @@ export const SocketProvider = ({ children }) => {
       if (response.ok) {
         const data = await response.json();
         
+        console.log('📡 Poll response - lastUpdate:', data.lastUpdate, 'current:', lastUpdate.current, 'newer:', data.lastUpdate > lastUpdate.current);
+        console.log('📡 Poll response - currentSong:', data.currentSong, 'queue length:', data.queue?.length);
+        
         // Only update if the data is newer than what we have
         if (data.lastUpdate > lastUpdate.current) {
           const currentData = sessionDataRef.current;
+          console.log('📡 Updating session data with newer data');
           setSessionData(data);
           lastUpdate.current = data.lastUpdate;
           
           // Emit events for compatibility with existing code
           if (mockSocket.current) {
             if (data.currentSong !== currentData?.currentSong) {
+              console.log('📡 Emitting songChanged event');
               mockSocket.current._emit('songChanged', data.currentSong);
             }
             if (JSON.stringify(data.queue) !== JSON.stringify(currentData?.queue)) {
+              console.log('📡 Emitting queueUpdated event');
               mockSocket.current._emit('queueUpdated', data.queue);
             }
             if (data.isPlaying !== currentData?.isPlaying) {
+              console.log('📡 Emitting playbackStateChanged event');
               mockSocket.current._emit('playbackStateChanged', data.isPlaying);
             }
           }
+        } else {
+          console.log('📡 No update needed - data is not newer');
         }
       } else {
         console.error('❌ Poll failed:', response.status, response.statusText);

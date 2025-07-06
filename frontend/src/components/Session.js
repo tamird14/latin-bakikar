@@ -113,16 +113,19 @@ const Session = () => {
       // Listen for sync events
       socket.on('queueUpdated', (newQueue) => {
         console.log('🔄 Queue updated from sync:', newQueue);
+        console.log('🔄 Guest is host:', isHost, 'Current queue:', queue);
         setQueue(newQueue || []);
       });
       
       socket.on('songChanged', (newSong) => {
         console.log('🔄 Song changed from sync:', newSong);
+        console.log('🔄 Guest is host:', isHost, 'Current song:', currentSong);
         setCurrentSong(newSong);
       });
       
       socket.on('playbackStateChanged', (newPlayingState) => {
         console.log('🔄 Playback state changed from sync:', newPlayingState);
+        console.log('🔄 Guest is host:', isHost, 'Current playing state:', isPlaying);
         setIsPlaying(newPlayingState);
       });
       
@@ -132,12 +135,15 @@ const Session = () => {
         const forceSync = setTimeout(async () => {
           try {
             console.log('🔄 Guest forcing session sync...');
+            console.log('🔄 Current local state - currentSong:', currentSong, 'queue:', queue);
+            
             const clientId = socket?.getClientId ? socket.getClientId() : null;
             const freshSessionData = await getSession(sessionId, clientId);
             console.log('🔄 Fresh session data for guest:', freshSessionData);
             
-            if (freshSessionData.currentSong || (freshSessionData.queue && freshSessionData.queue.length > 0)) {
-              console.log('✅ Found real session state, updating...');
+            // Always update if we have fresh data, even if our local state is empty
+            if (freshSessionData) {
+              console.log('✅ Updating guest state with fresh data...');
               setCurrentSong(freshSessionData.currentSong);
               setQueue(freshSessionData.queue || []);
               setIsPlaying(freshSessionData.isPlaying);
@@ -174,13 +180,22 @@ const Session = () => {
   const republishCurrentState = useCallback(() => {
     if (isHost && socket) {
       console.log('📢 Host republishing current state...');
+      console.log('📢 Current song:', currentSong);
+      console.log('📢 Current queue:', queue);
+      console.log('📢 Playing state:', isPlaying);
+      
       if (currentSong) {
+        console.log('📢 Sending updateCurrentSong event');
         socket.emit('updateCurrentSong', currentSong);
       }
       if (queue && queue.length > 0) {
+        console.log('📢 Sending updateQueue event with', queue.length, 'songs');
         socket.emit('updateQueue', queue);
       }
+      console.log('📢 Sending updatePlaybackState event');
       socket.emit('updatePlaybackState', isPlaying);
+    } else {
+      console.log('📢 Not republishing - isHost:', isHost, 'socket:', !!socket);
     }
   }, [isHost, socket, currentSong, queue, isPlaying]);
 
