@@ -124,7 +124,7 @@ export const SocketProvider = ({ children }) => {
     } finally {
       isUpdating.current = false;
     }
-  }, [clientId]);
+  }, [clientId, pollSession]);
   
   // Legacy single update function for backward compatibility
   const updateSession = useCallback(async (sessionId, updates) => {
@@ -372,8 +372,10 @@ export const SocketProvider = ({ children }) => {
         pollInterval.current = null;
       }
       
-      if (updateTimeout.current) {
-        clearTimeout(updateTimeout.current);
+      // Copy ref value to variable for cleanup
+      const currentUpdateTimeout = updateTimeout.current;
+      if (currentUpdateTimeout) {
+        clearTimeout(currentUpdateTimeout);
       }
       
       window.removeEventListener('beforeunload', handleBeforeUnload);
