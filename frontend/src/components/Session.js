@@ -112,7 +112,13 @@ const Session = () => {
           );
           setQueue(queueWithDurations);
           
-          setIsPlaying(sessionData.isPlaying);
+          // Only hosts should get the playing state from server data
+          // Guests should always have isPlaying: false
+          if (isHost) {
+            setIsPlaying(sessionData.isPlaying);
+          } else {
+            setIsPlaying(false);
+          }
         }
         
         setClientCount(sessionData.clientCount);
@@ -172,7 +178,11 @@ const Session = () => {
       socket.on('playbackStateChanged', (newPlayingState) => {
         console.log('🔄 Playback state changed from sync:', newPlayingState);
         console.log('🔄 User is host:', isHost, 'Current playing state:', isPlaying);
-        setIsPlaying(newPlayingState);
+        // Only hosts should update their playing state from sync events
+        // Guests should always have isPlaying: false locally
+        if (isHost) {
+          setIsPlaying(newPlayingState);
+        }
       });
       
       // New atomic state change handler
@@ -186,7 +196,8 @@ const Session = () => {
         if (stateData.changes.queue) {
           setQueue(stateData.queue || []);
         }
-        if (stateData.changes.playback) {
+        if (stateData.changes.playback && isHost) {
+          // Only hosts should update their playing state from sync events
           setIsPlaying(stateData.isPlaying);
         }
       });
@@ -224,7 +235,9 @@ const Session = () => {
               console.log('✅ Updating guest state with real session data...');
               setCurrentSong(freshSessionData.currentSong);
               setQueue(freshSessionData.queue || []);
-              setIsPlaying(freshSessionData.isPlaying);
+              // Guests should always have isPlaying: false locally
+              // They don't control playback, only the host does
+              setIsPlaying(false);
               hasReceivedRealData = true;
             } else if (syncAttempt < maxSyncAttempts) {
               console.log(`⏳ No real data yet, will retry in ${2000 * syncAttempt}ms...`);
