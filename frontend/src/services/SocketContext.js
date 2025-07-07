@@ -23,14 +23,17 @@ export const SocketProvider = ({ children }) => {
       return existingId;
     }
     
-    // Generate new client ID and store it
-    const id = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    // Generate new client ID with better uniqueness
+    const id = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}_${Math.random().toString(36).substr(2, 5)}`;
     sessionStorage.setItem('latin_bakikar_client_id', id);
     console.log('🆔 Generated new client ID:', id);
     return id;
   });
   
   const lastLocalUpdate = useRef(0);
+  const isUpdating = useRef(false); // Track if we're currently making an update
+  const updateQueue = useRef([]); // Queue for batching updates
+  const updateTimeout = useRef(null);
   
   const pollInterval = useRef(null);
   const currentSessionId = useRef(null);
@@ -42,18 +45,34 @@ export const SocketProvider = ({ children }) => {
     sessionDataRef.current = sessionData;
   }, [sessionData]);
   
-  // API functions for session management
-  const updateSession = useCallback(async (sessionId, updates) => {
+  // Batch and send updates atomically
+  const batchedUpdateSession = useCallback(async (sessionId, updates) => {
     try {
-      console.log('🔄 Updating session:', sessionId, 'with updates:', updates);
+      console.log('🔄 Batched update session:', sessionId, 'with updates:', updates);
       
-      // Mark this as a local update
+      // Mark this as a local update with longer window for complex operations
       lastLocalUpdate.current = Date.now();
+      isUpdating.current = true;
+      
+      // Pause polling during updates to prevent conflicts
+      const wasPolling = !!pollInterval.current;
+      if (pollInterval.current) {
+        clearInterval(pollInterval.current);
+        pollInterval.current = null;
+      }
+      
+      // Add version/timestamp for optimistic locking
+      const updatePayload = {
+        ...updates,
+        clientId,
+        updateId: `${clientId}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+        expectedVersion: sessionDataRef.current?.version || 0
+      };
       
       const response = await fetch(`/api/sessions/${sessionId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates)
+        body: JSON.stringify(updatePayload)
       });
       
       if (response.ok) {
@@ -61,16 +80,92 @@ export const SocketProvider = ({ children }) => {
         console.log('✅ Session updated successfully, client count:', data.clientCount);
         setSessionData(data);
         lastUpdate.current = data.lastUpdate;
+        
+        // Resume polling after successful update
+        if (wasPolling) {
+          setTimeout(() => {
+            if (!pollInterval.current) {
+              pollInterval.current = setInterval(() => pollSession(sessionId), 1000);
+            }
+          }, 200); // Shorter delay for better responsiveness
+        }
+        
         return data;
       } else {
+        const errorData = await response.json().catch(() => ({}));
+        if (errorData.error === 'version_conflict') {
+          console.log('⚠️ Version conflict detected, forcing refresh...');
+          // Force a poll to get latest data
+          await pollSession(sessionId);
+        }
         console.error('❌ Failed to update session:', response.status, response.statusText);
+        
+        // Resume polling even on failure
+        if (wasPolling) {
+          setTimeout(() => {
+            if (!pollInterval.current) {
+              pollInterval.current = setInterval(() => pollSession(sessionId), 1000);
+            }
+          }, 200);
+        }
       }
     } catch (error) {
       console.error('Failed to update session:', error);
+      
+      // Resume polling on error
+      const wasPolling = !!pollInterval.current;
+      if (wasPolling) {
+        setTimeout(() => {
+          if (!pollInterval.current) {
+            pollInterval.current = setInterval(() => pollSession(sessionId), 1000);
+          }
+        }, 200);
+      }
+    } finally {
+      isUpdating.current = false;
     }
-  }, []);
+  }, [clientId]);
+  
+  // Legacy single update function for backward compatibility
+  const updateSession = useCallback(async (sessionId, updates) => {
+    return batchedUpdateSession(sessionId, updates);
+  }, [batchedUpdateSession]);
+  
+  // New atomic update function for complex operations
+  const atomicUpdate = useCallback(async (sessionId, updates) => {
+    console.log('🔄 Atomic update requested:', updates);
+    
+    // If already updating, queue this update
+    if (isUpdating.current) {
+      console.log('⏳ Update in progress, queueing...');
+      updateQueue.current.push(updates);
+      return;
+    }
+    
+    // Clear any pending timeout
+    if (updateTimeout.current) {
+      clearTimeout(updateTimeout.current);
+    }
+    
+    // Batch this update with any queued updates
+    const allUpdates = [updates, ...updateQueue.current];
+    updateQueue.current = [];
+    
+    // Merge all updates into one atomic operation
+    const mergedUpdates = allUpdates.reduce((acc, update) => {
+      return { ...acc, ...update };
+    }, {});
+    
+    return batchedUpdateSession(sessionId, mergedUpdates);
+  }, [batchedUpdateSession]);
   
   const pollSession = useCallback(async (sessionId) => {
+    // Don't poll if we're currently updating
+    if (isUpdating.current) {
+      console.log('📡 Skipping poll - update in progress');
+      return;
+    }
+    
     try {
       const response = await fetch(`/api/sessions/${sessionId}?clientId=${encodeURIComponent(clientId)}`);
       if (response.ok) {
@@ -87,24 +182,47 @@ export const SocketProvider = ({ children }) => {
           lastUpdate.current = data.lastUpdate;
           
           // Only emit events if this update didn't originate from this client
+          // Extended time window for complex operations
           const timeSinceLocalUpdate = Date.now() - lastLocalUpdate.current;
-          const isLocalUpdate = timeSinceLocalUpdate < 2000; // Within 2 seconds of local update
+          const isRecentLocalUpdate = timeSinceLocalUpdate < 3000; // Increased to 3 seconds
           
-          if (!isLocalUpdate && mockSocket.current) {
+          // Also check if the update ID matches this client (more reliable than timing)
+          const isOurUpdate = data.updateId && data.updateId.startsWith(clientId);
+          
+          if (!isRecentLocalUpdate && !isOurUpdate && mockSocket.current) {
             console.log('📡 Emitting sync events (not a local update)');
-            if (data.currentSong !== currentData?.currentSong) {
+            
+            // Emit atomic state change to prevent partial updates
+            const hasChanges = {
+              song: data.currentSong !== currentData?.currentSong,
+              queue: JSON.stringify(data.queue) !== JSON.stringify(currentData?.queue),
+              playback: data.isPlaying !== currentData?.isPlaying
+            };
+            
+            if (hasChanges.song || hasChanges.queue || hasChanges.playback) {
+              console.log('📡 Emitting atomicStateChange event');
+              mockSocket.current._emit('atomicStateChange', {
+                currentSong: data.currentSong,
+                queue: data.queue,
+                isPlaying: data.isPlaying,
+                changes: hasChanges
+              });
+            }
+            
+            // Still emit individual events for backward compatibility
+            if (hasChanges.song) {
               console.log('📡 Emitting songChanged event');
               mockSocket.current._emit('songChanged', data.currentSong);
             }
-            if (JSON.stringify(data.queue) !== JSON.stringify(currentData?.queue)) {
+            if (hasChanges.queue) {
               console.log('📡 Emitting queueUpdated event');
               mockSocket.current._emit('queueUpdated', data.queue);
             }
-            if (data.isPlaying !== currentData?.isPlaying) {
+            if (hasChanges.playback) {
               console.log('📡 Emitting playbackStateChanged event');
               mockSocket.current._emit('playbackStateChanged', data.isPlaying);
             }
-          } else if (isLocalUpdate) {
+          } else if (isRecentLocalUpdate || isOurUpdate) {
             console.log('📡 Skipping event emission - this appears to be from a recent local update');
           }
         } else {
@@ -116,7 +234,7 @@ export const SocketProvider = ({ children }) => {
     } catch (error) {
       console.error('Failed to poll session:', error);
     }
-  }, [clientId]); // Add clientId dependency
+  }, [clientId]);
   
   const mockSocket = useRef(null);
   
@@ -155,32 +273,34 @@ export const SocketProvider = ({ children }) => {
             break;
             
           case 'updateQueue':
-            console.log('🔄 Emitting queue update, pausing polling briefly to avoid conflicts');
-            // Temporarily pause polling to avoid conflicts
-            const wasPolling = !!pollInterval.current;
-            if (pollInterval.current) {
-              clearInterval(pollInterval.current);
-              pollInterval.current = null;
-            }
-            
-            updateSession(sessionId, { queue: data }).then(() => {
-              // Resume polling after a short delay
-              if (wasPolling) {
-                setTimeout(() => {
-                  if (!pollInterval.current) {
-                    pollInterval.current = setInterval(() => pollSession(sessionId), 1000);
-                  }
-                }, 500);
-              }
-            });
+            console.log('🔄 Emitting queue update');
+            updateSession(sessionId, { queue: data });
             break;
             
           case 'updateCurrentSong':
+            console.log('🔄 Emitting current song update');
             updateSession(sessionId, { currentSong: data });
             break;
             
           case 'updatePlaybackState':
+            console.log('🔄 Emitting playback state update');
             updateSession(sessionId, { isPlaying: data });
+            break;
+            
+          // New atomic update for complex operations
+          case 'atomicUpdate':
+            console.log('🔄 Emitting atomic update');
+            atomicUpdate(sessionId, data);
+            break;
+            
+          // Song transition helper - updates song, queue, and playback atomically
+          case 'songTransition':
+            console.log('🔄 Emitting song transition update');
+            atomicUpdate(sessionId, {
+              currentSong: data.currentSong,
+              queue: data.queue,
+              isPlaying: data.isPlaying
+            });
             break;
             
           default:
@@ -252,9 +372,13 @@ export const SocketProvider = ({ children }) => {
         pollInterval.current = null;
       }
       
+      if (updateTimeout.current) {
+        clearTimeout(updateTimeout.current);
+      }
+      
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [updateSession, pollSession, clientId]); // Removed sessionData dependency
+  }, [updateSession, pollSession, atomicUpdate, clientId]);
 
   const value = {
     socket,

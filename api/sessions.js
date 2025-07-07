@@ -111,7 +111,9 @@ module.exports = function handler(req, res) {
           queue: existingSession.queue || [],
           isPlaying: existingSession.isPlaying || false,
           clientCount: clients.size,
-          lastUpdate: existingSession.lastUpdate || Date.now()
+          lastUpdate: existingSession.lastUpdate || Date.now(),
+          version: existingSession.version || 0,
+          updateId: req.body?.updateId || null
         };
         
         console.log('✅ Returning session data - queue length:', responseData.queue.length);
@@ -137,7 +139,9 @@ module.exports = function handler(req, res) {
           isPlaying: false,
           clientCount: clients.size,
           lastUpdate: Date.now(),
-          needsSync: true // Flag to indicate this might be a stale state
+          version: 0,
+          needsSync: true, // Flag to indicate this might be a stale state
+          updateId: req.body?.updateId || null
         };
         
         res.json(minimalSession);
@@ -153,7 +157,9 @@ module.exports = function handler(req, res) {
         queue: [],
         isPlaying: false,
         clientCount: clientId ? 1 : 0, // If client ID provided, count it
-        lastUpdate: Date.now()
+        lastUpdate: Date.now(),
+        version: 0,
+        updateId: req.body?.updateId || null
       };
       
       console.log('✅ Returning default session for:', sessionId);
@@ -168,7 +174,7 @@ module.exports = function handler(req, res) {
 
   if (req.method === 'POST') {
     // Check if this is an update request
-    const isUpdateRequest = isSessionIdRequest && req.body && (req.body.action || req.body.queue !== undefined || req.body.currentSong !== undefined);
+    const isUpdateRequest = isSessionIdRequest && req.body && (req.body.action || req.body.queue !== undefined || req.body.currentSong !== undefined || req.body.isPlaying !== undefined);
     
     if (isUpdateRequest) {
       // Handle session updates (queue, playback state, etc.)
@@ -184,8 +190,21 @@ module.exports = function handler(req, res) {
             currentSong: null,
             queue: [],
             isPlaying: false,
-            lastUpdate: Date.now()
+            lastUpdate: Date.now(),
+            version: 0
           };
+        }
+        
+        // Check for version conflicts (optimistic locking)
+        const expectedVersion = req.body.expectedVersion || 0;
+        if (session.version !== expectedVersion) {
+          console.log('⚠️ Version conflict detected:', 'expected:', expectedVersion, 'actual:', session.version);
+          res.status(409).json({ 
+            error: 'version_conflict', 
+            message: 'Session was updated by another client',
+            currentVersion: session.version
+          });
+          return;
         }
         
         // Update session data based on request
@@ -219,28 +238,40 @@ module.exports = function handler(req, res) {
           }
         }
         
+        // Handle atomic updates (multiple fields at once)
+        let hasUpdates = false;
+        
         if (req.body.queue !== undefined) {
           session.queue = req.body.queue;
           console.log('🎵 Updated queue, now has:', session.queue.length, 'songs');
           console.log('🎵 Queue songs:', session.queue.map(s => s.name).join(', '));
+          hasUpdates = true;
         }
         
         if (req.body.currentSong !== undefined) {
           session.currentSong = req.body.currentSong;
           console.log('🎵 Updated current song:', session.currentSong?.name || 'none');
+          hasUpdates = true;
         }
         
         if (req.body.isPlaying !== undefined) {
           session.isPlaying = req.body.isPlaying;
           console.log('🎵 Updated playing state:', session.isPlaying);
+          hasUpdates = true;
         }
         
         if (req.body.name !== undefined) {
           session.name = req.body.name;
           console.log('📝 Updated session name:', session.name);
+          hasUpdates = true;
         }
         
-        session.lastUpdate = Date.now();
+        // Update version and timestamp only if there were actual changes
+        if (hasUpdates) {
+          session.version = (session.version || 0) + 1;
+          session.lastUpdate = Date.now();
+        }
+        
         sessions.set(sessionId, session);
         
         const clients = sessionClients.get(sessionId) || new Map();
@@ -252,7 +283,9 @@ module.exports = function handler(req, res) {
           queue: session.queue,
           isPlaying: session.isPlaying,
           clientCount: clients.size,
-          lastUpdate: session.lastUpdate
+          lastUpdate: session.lastUpdate,
+          version: session.version,
+          updateId: req.body.updateId || null
         });
       } catch (error) {
         console.error('❌ Error updating session:', error);
@@ -274,7 +307,8 @@ module.exports = function handler(req, res) {
           currentSong: null,
           queue: [],
           isPlaying: false,
-          lastUpdate: Date.now()
+          lastUpdate: Date.now(),
+          version: 0
         };
         
         sessions.set(sessionId, session);

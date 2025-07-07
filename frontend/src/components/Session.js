@@ -165,28 +165,49 @@ const Session = () => {
       
       socket.on('songChanged', (newSong) => {
         console.log('🔄 Song changed from sync:', newSong);
-        console.log('🔄 Guest is host:', isHost, 'Current song:', currentSong);
+        console.log('🔄 User is host:', isHost, 'Current song:', currentSong);
         setCurrentSong(newSong);
       });
       
       socket.on('playbackStateChanged', (newPlayingState) => {
         console.log('🔄 Playback state changed from sync:', newPlayingState);
-        console.log('🔄 Guest is host:', isHost, 'Current playing state:', isPlaying);
+        console.log('🔄 User is host:', isHost, 'Current playing state:', isPlaying);
         setIsPlaying(newPlayingState);
       });
       
-      // For guests: Force a session reload multiple times to get the real state
-      // This helps when the backend's in-memory session state was lost
+      // New atomic state change handler
+      socket.on('atomicStateChange', (stateData) => {
+        console.log('🔄 Atomic state change from sync:', stateData);
+        console.log('🔄 Changes:', stateData.changes);
+        
+        if (stateData.changes.song) {
+          setCurrentSong(stateData.currentSong);
+        }
+        if (stateData.changes.queue) {
+          setQueue(stateData.queue || []);
+        }
+        if (stateData.changes.playback) {
+          setIsPlaying(stateData.isPlaying);
+        }
+      });
+      
+      // For guests: Use a more gentle sync approach that doesn't interfere with host state
       if (!isHost) {
         let syncAttempt = 0;
-        const maxSyncAttempts = 5;
+        const maxSyncAttempts = 3; // Reduced attempts
         const syncTimeouts = [];
+        let hasReceivedRealData = false;
         
         const attemptSync = async () => {
           try {
             syncAttempt++;
-            console.log(`🔄 Guest force sync attempt ${syncAttempt}/${maxSyncAttempts}...`);
-            console.log('🔄 Current local state - currentSong:', currentSong, 'queue:', queue);
+            console.log(`🔄 Guest gentle sync attempt ${syncAttempt}/${maxSyncAttempts}...`);
+            
+            // Only do this if we haven't received real data yet
+            if (hasReceivedRealData) {
+              console.log('✅ Already have real data, skipping sync attempt');
+              return;
+            }
             
             const clientId = socket?.getClientId ? socket.getClientId() : null;
             const freshSessionData = await getSession(sessionId, clientId);
@@ -204,25 +225,26 @@ const Session = () => {
               setCurrentSong(freshSessionData.currentSong);
               setQueue(freshSessionData.queue || []);
               setIsPlaying(freshSessionData.isPlaying);
+              hasReceivedRealData = true;
             } else if (syncAttempt < maxSyncAttempts) {
-              console.log(`⏳ No real data yet, will retry in ${1000 * syncAttempt}ms...`);
-              const nextTimeout = setTimeout(attemptSync, 1000 * syncAttempt);
+              console.log(`⏳ No real data yet, will retry in ${2000 * syncAttempt}ms...`);
+              const nextTimeout = setTimeout(attemptSync, 2000 * syncAttempt);
               syncTimeouts.push(nextTimeout);
             } else {
               console.log('❌ Max sync attempts reached, giving up');
             }
           } catch (err) {
-            console.error('❌ Failed to force sync session:', err);
+            console.error('❌ Failed to gentle sync session:', err);
             if (syncAttempt < maxSyncAttempts) {
-              console.log(`⏳ Retrying sync in ${1000 * syncAttempt}ms...`);
-              const nextTimeout = setTimeout(attemptSync, 1000 * syncAttempt);
+              console.log(`⏳ Retrying sync in ${2000 * syncAttempt}ms...`);
+              const nextTimeout = setTimeout(attemptSync, 2000 * syncAttempt);
               syncTimeouts.push(nextTimeout);
             }
           }
         };
         
-        // Start first sync attempt after 1 second
-        const firstTimeout = setTimeout(attemptSync, 1000);
+        // Start first sync attempt after 2 seconds (give host time to republish)
+        const firstTimeout = setTimeout(attemptSync, 2000);
         syncTimeouts.push(firstTimeout);
         
         // Cleanup all timeouts
@@ -233,6 +255,7 @@ const Session = () => {
           socket.off('queueUpdated');
           socket.off('songChanged');
           socket.off('playbackStateChanged');
+          socket.off('atomicStateChange');
         };
       }
       
@@ -243,10 +266,11 @@ const Session = () => {
         socket.off('queueUpdated');
         socket.off('songChanged');
         socket.off('playbackStateChanged');
+        socket.off('atomicStateChange');
       };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, isHost]); // Add isHost dependency for the guest-specific logic
+  }, [sessionId, isHost]);
 
   // Force republish current state - useful when guests join and might have stale data
   const republishCurrentState = useCallback(() => {
@@ -256,16 +280,16 @@ const Session = () => {
       console.log('📢 Current queue:', queue);
       console.log('📢 Playing state:', isPlaying);
       
-      if (currentSong) {
-        console.log('📢 Sending updateCurrentSong event');
-        socket.emit('updateCurrentSong', currentSong);
+      // Use atomic update to prevent race conditions
+      const stateUpdate = {};
+      if (currentSong) stateUpdate.currentSong = currentSong;
+      if (queue && queue.length > 0) stateUpdate.queue = queue;
+      stateUpdate.isPlaying = isPlaying;
+      
+      if (Object.keys(stateUpdate).length > 0) {
+        console.log('📢 Sending atomic state update');
+        socket.emit('atomicUpdate', stateUpdate);
       }
-      if (queue && queue.length > 0) {
-        console.log('📢 Sending updateQueue event with', queue.length, 'songs');
-        socket.emit('updateQueue', queue);
-      }
-      console.log('📢 Sending updatePlaybackState event');
-      socket.emit('updatePlaybackState', isPlaying);
     } else {
       console.log('📢 Not republishing - isHost:', isHost, 'socket:', !!socket);
     }
@@ -279,12 +303,19 @@ const Session = () => {
       setClientCount(sessionData.clientCount);
       
       // If we're the host and client count increased, republish state for new guests
+      // But only if we have actual content to share
       if (isHost && previousCount > 0 && sessionData.clientCount > previousCount) {
-        console.log('👥 New guest joined, republishing state...');
-        setTimeout(() => republishCurrentState(), 500); // Small delay to ensure guest is ready
+        const hasContent = currentSong || (queue && queue.length > 0);
+        if (hasContent) {
+          console.log('👥 New guest joined, republishing state...');
+          // Longer delay to ensure guest is fully ready
+          setTimeout(() => republishCurrentState(), 1000);
+        } else {
+          console.log('👥 New guest joined but no content to share');
+        }
       }
     }
-  }, [sessionData, clientCount, isHost, republishCurrentState]);
+  }, [sessionData, clientCount, isHost, republishCurrentState, currentSong, queue]);
 
   // Update queue items with stored durations when durations change
   useEffect(() => {
@@ -388,11 +419,14 @@ const Session = () => {
         setQueue(newQueue);
         setIsPlaying(true);
         
-        // Sync to other devices
+        // Use atomic update for song transition
         if (socket) {
-          socket.emit('updateCurrentSong', firstSong);
-          socket.emit('updateQueue', newQueue);
-          socket.emit('updatePlaybackState', true);
+          console.log('⏯️ Sending atomic song transition update');
+          socket.emit('songTransition', {
+            currentSong: firstSong,
+            queue: newQueue,
+            isPlaying: true
+          });
         }
         return;
       }
@@ -402,10 +436,13 @@ const Session = () => {
         setCurrentSong(song);
         setIsPlaying(true);
         
-        // Sync current song
+        // Use atomic update for song change
         if (socket) {
-          socket.emit('updateCurrentSong', song);
-          socket.emit('updatePlaybackState', true);
+          console.log('⏯️ Sending atomic song change update');
+          socket.emit('atomicUpdate', {
+            currentSong: song,
+            isPlaying: true
+          });
         }
         return;
       }
@@ -433,11 +470,14 @@ const Session = () => {
         setQueue(newQueue);
         setIsPlaying(true);
         
-        // Sync to other devices
+        // Use atomic update for song transition
         if (socket) {
-          socket.emit('updateCurrentSong', nextSong);
-          socket.emit('updateQueue', newQueue);
-          socket.emit('updatePlaybackState', true);
+          console.log('⏭️ Sending atomic song transition update');
+          socket.emit('songTransition', {
+            currentSong: nextSong,
+            queue: newQueue,
+            isPlaying: true
+          });
         }
       } else {
         // Queue is empty - stop playing and clear current song
@@ -446,10 +486,13 @@ const Session = () => {
         setIsPlaying(false);
         setCurrentTime(0);
         
-        // Sync to other devices
+        // Use atomic update for stopping
         if (socket) {
-          socket.emit('updateCurrentSong', null);
-          socket.emit('updatePlaybackState', false);
+          console.log('⏭️ Sending atomic stop update');
+          socket.emit('atomicUpdate', {
+            currentSong: null,
+            isPlaying: false
+          });
         }
       }
     }
