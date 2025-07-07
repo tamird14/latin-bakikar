@@ -45,6 +45,83 @@ export const SocketProvider = ({ children }) => {
     sessionDataRef.current = sessionData;
   }, [sessionData]);
   
+  const pollSession = useCallback(async (sessionId) => {
+    // Don't poll if we're currently updating
+    if (isUpdating.current) {
+      console.log('📡 Skipping poll - update in progress');
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/api/sessions/${sessionId}?clientId=${encodeURIComponent(clientId)}`);
+      if (response.ok) {
+        const data = await response.json();
+        
+        console.log('📡 Poll response - lastUpdate:', data.lastUpdate, 'current:', lastUpdate.current, 'newer:', data.lastUpdate > lastUpdate.current);
+        console.log('📡 Poll response - currentSong:', data.currentSong, 'queue length:', data.queue?.length);
+        
+        // Only update if the data is newer than what we have
+        if (data.lastUpdate > lastUpdate.current) {
+          const currentData = sessionDataRef.current;
+          console.log('📡 Updating session data with newer data');
+          setSessionData(data);
+          lastUpdate.current = data.lastUpdate;
+          
+          // Only emit events if this update didn't originate from this client
+          // Extended time window for complex operations
+          const timeSinceLocalUpdate = Date.now() - lastLocalUpdate.current;
+          const isRecentLocalUpdate = timeSinceLocalUpdate < 3000; // Increased to 3 seconds
+          
+          // Also check if the update ID matches this client (more reliable than timing)
+          const isOurUpdate = data.updateId && data.updateId.startsWith(clientId);
+          
+          if (!isRecentLocalUpdate && !isOurUpdate && mockSocket.current) {
+            console.log('📡 Emitting sync events (not a local update)');
+            
+            // Emit atomic state change to prevent partial updates
+            const hasChanges = {
+              song: data.currentSong !== currentData?.currentSong,
+              queue: JSON.stringify(data.queue) !== JSON.stringify(currentData?.queue),
+              playback: data.isPlaying !== currentData?.isPlaying
+            };
+            
+            if (hasChanges.song || hasChanges.queue || hasChanges.playback) {
+              console.log('📡 Emitting atomicStateChange event');
+              mockSocket.current._emit('atomicStateChange', {
+                currentSong: data.currentSong,
+                queue: data.queue,
+                isPlaying: data.isPlaying,
+                changes: hasChanges
+              });
+            }
+            
+            // Still emit individual events for backward compatibility
+            if (hasChanges.song) {
+              console.log('📡 Emitting songChanged event');
+              mockSocket.current._emit('songChanged', data.currentSong);
+            }
+            if (hasChanges.queue) {
+              console.log('📡 Emitting queueUpdated event');
+              mockSocket.current._emit('queueUpdated', data.queue);
+            }
+            if (hasChanges.playback) {
+              console.log('📡 Emitting playbackStateChanged event');
+              mockSocket.current._emit('playbackStateChanged', data.isPlaying);
+            }
+          } else if (isRecentLocalUpdate || isOurUpdate) {
+            console.log('📡 Skipping event emission - this appears to be from a recent local update');
+          }
+        } else {
+          console.log('📡 No update needed - data is not newer');
+        }
+      } else {
+        console.error('❌ Poll failed:', response.status, response.statusText);
+      }
+    } catch (error) {
+      console.error('Failed to poll session:', error);
+    }
+  }, [clientId]);
+  
   // Batch and send updates atomically
   const batchedUpdateSession = useCallback(async (sessionId, updates) => {
     try {
@@ -159,86 +236,12 @@ export const SocketProvider = ({ children }) => {
     return batchedUpdateSession(sessionId, mergedUpdates);
   }, [batchedUpdateSession]);
   
-  const pollSession = useCallback(async (sessionId) => {
-    // Don't poll if we're currently updating
-    if (isUpdating.current) {
-      console.log('📡 Skipping poll - update in progress');
-      return;
-    }
-    
-    try {
-      const response = await fetch(`/api/sessions/${sessionId}?clientId=${encodeURIComponent(clientId)}`);
-      if (response.ok) {
-        const data = await response.json();
-        
-        console.log('📡 Poll response - lastUpdate:', data.lastUpdate, 'current:', lastUpdate.current, 'newer:', data.lastUpdate > lastUpdate.current);
-        console.log('📡 Poll response - currentSong:', data.currentSong, 'queue length:', data.queue?.length);
-        
-        // Only update if the data is newer than what we have
-        if (data.lastUpdate > lastUpdate.current) {
-          const currentData = sessionDataRef.current;
-          console.log('📡 Updating session data with newer data');
-          setSessionData(data);
-          lastUpdate.current = data.lastUpdate;
-          
-          // Only emit events if this update didn't originate from this client
-          // Extended time window for complex operations
-          const timeSinceLocalUpdate = Date.now() - lastLocalUpdate.current;
-          const isRecentLocalUpdate = timeSinceLocalUpdate < 3000; // Increased to 3 seconds
-          
-          // Also check if the update ID matches this client (more reliable than timing)
-          const isOurUpdate = data.updateId && data.updateId.startsWith(clientId);
-          
-          if (!isRecentLocalUpdate && !isOurUpdate && mockSocket.current) {
-            console.log('📡 Emitting sync events (not a local update)');
-            
-            // Emit atomic state change to prevent partial updates
-            const hasChanges = {
-              song: data.currentSong !== currentData?.currentSong,
-              queue: JSON.stringify(data.queue) !== JSON.stringify(currentData?.queue),
-              playback: data.isPlaying !== currentData?.isPlaying
-            };
-            
-            if (hasChanges.song || hasChanges.queue || hasChanges.playback) {
-              console.log('📡 Emitting atomicStateChange event');
-              mockSocket.current._emit('atomicStateChange', {
-                currentSong: data.currentSong,
-                queue: data.queue,
-                isPlaying: data.isPlaying,
-                changes: hasChanges
-              });
-            }
-            
-            // Still emit individual events for backward compatibility
-            if (hasChanges.song) {
-              console.log('📡 Emitting songChanged event');
-              mockSocket.current._emit('songChanged', data.currentSong);
-            }
-            if (hasChanges.queue) {
-              console.log('📡 Emitting queueUpdated event');
-              mockSocket.current._emit('queueUpdated', data.queue);
-            }
-            if (hasChanges.playback) {
-              console.log('📡 Emitting playbackStateChanged event');
-              mockSocket.current._emit('playbackStateChanged', data.isPlaying);
-            }
-          } else if (isRecentLocalUpdate || isOurUpdate) {
-            console.log('📡 Skipping event emission - this appears to be from a recent local update');
-          }
-        } else {
-          console.log('📡 No update needed - data is not newer');
-        }
-      } else {
-        console.error('❌ Poll failed:', response.status, response.statusText);
-      }
-    } catch (error) {
-      console.error('Failed to poll session:', error);
-    }
-  }, [clientId]);
-  
   const mockSocket = useRef(null);
   
   useEffect(() => {
+    // Capture ref values at the start of the effect for cleanup
+    const currentUpdateTimeoutRef = updateTimeout.current;
+    
     // Create a mock socket that uses our session API
     const socket = {
       emit: (event, data) => {
@@ -372,10 +375,9 @@ export const SocketProvider = ({ children }) => {
         pollInterval.current = null;
       }
       
-      // Copy ref value to variable for cleanup
-      const currentUpdateTimeout = updateTimeout.current;
-      if (currentUpdateTimeout) {
-        clearTimeout(currentUpdateTimeout);
+      // Use the captured ref value for cleanup
+      if (currentUpdateTimeoutRef) {
+        clearTimeout(currentUpdateTimeoutRef);
       }
       
       window.removeEventListener('beforeunload', handleBeforeUnload);
