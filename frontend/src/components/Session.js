@@ -42,13 +42,19 @@ const Session = () => {
   const currentSongRef = useRef(null);
   const songDurationsRef = useRef({});
   const hostStateEstablishedRef = useRef(false);
+  const queueRef = useRef([]);
+  const isPlayingRef = useRef(false);
+  const isHostRef = useRef(false);
 
   // Update refs when values change
   useEffect(() => {
     currentSongRef.current = currentSong;
     originalSessionNameRef.current = originalSessionName;
     songDurationsRef.current = songDurations;
-  }, [currentSong, originalSessionName, songDurations]);
+    queueRef.current = queue;
+    isPlayingRef.current = isPlaying;
+    isHostRef.current = isHost;
+  }, [currentSong, originalSessionName, songDurations, queue, isPlaying, isHost]);
 
   // Load session data
   useEffect(() => {
@@ -63,12 +69,12 @@ const Session = () => {
         
         // For hosts: Only restore from localStorage if this is the first load and backend is truly empty
         // We need to be more careful about when to restore from backup
-        const isFirstLoad = !currentSong && queue.length === 0 && !isPlaying;
+        const isFirstLoad = !currentSongRef.current && queueRef.current.length === 0 && !isPlayingRef.current;
         const hasBackendContent = sessionData.currentSong || (sessionData.queue && sessionData.queue.length > 0);
-        const hasLocalContent = currentSong || queue.length > 0 || isPlaying;
+        const hasLocalContent = currentSongRef.current || queueRef.current.length > 0 || isPlayingRef.current;
         
         // Only restore if we're truly starting fresh (no local content) and backend is empty
-        if (isHost && isFirstLoad && !hasBackendContent && !hasLocalContent) {
+        if (isHostRef.current && isFirstLoad && !hasBackendContent && !hasLocalContent) {
           console.log('🏠 Host detected empty backend state on first load - checking for local backup...');
           
           // Try to restore from localStorage
@@ -153,7 +159,7 @@ const Session = () => {
     };
 
     loadSession();
-  }, [sessionId, socket]); // Remove isHost dependency to prevent reloads when guest joins
+  }, [sessionId, socket]); // Using refs for state values to prevent unnecessary re-renders
 
   // Socket connection and sync - only run once per session
   useEffect(() => {
