@@ -183,9 +183,13 @@ const Session = () => {
         console.log('🔄 User is host:', isHostRef.current, 'Current queue length:', queueRef.current.length);
         console.log('🔄 New queue length:', newQueue?.length || 0);
         
-        // Only apply queue updates if we're not the host or if the queue is actually different
-        // This prevents hosts from having their state overwritten by guest sync events
-        if (!isHostRef.current || (hostStateEstablishedRef.current && JSON.stringify(newQueue) !== JSON.stringify(queueRef.current))) {
+        // Guests should always get queue updates
+        // Hosts should only get updates if they're different to prevent overwrites
+        if (!isHostRef.current) {
+          console.log('🔄 Guest applying queue update');
+          setQueue(newQueue || []);
+        } else if (hostStateEstablishedRef.current && JSON.stringify(newQueue) !== JSON.stringify(queueRef.current)) {
+          console.log('🔄 Host applying queue update - different from current');
           setQueue(newQueue || []);
         } else {
           console.log('🔄 Skipping queue update for host - no change detected or state not established');
@@ -196,8 +200,13 @@ const Session = () => {
         console.log('🔄 Song changed from sync:', newSong);
         console.log('🔄 User is host:', isHostRef.current, 'Current song:', currentSongRef.current);
         
-        // Only apply song changes if we're not the host or if the song is actually different
-        if (!isHostRef.current || (hostStateEstablishedRef.current && JSON.stringify(newSong) !== JSON.stringify(currentSongRef.current))) {
+        // Guests should always get song updates
+        // Hosts should only get updates if they're different to prevent overwrites
+        if (!isHostRef.current) {
+          console.log('🔄 Guest applying song change');
+          setCurrentSong(newSong);
+        } else if (hostStateEstablishedRef.current && JSON.stringify(newSong) !== JSON.stringify(currentSongRef.current)) {
+          console.log('🔄 Host applying song change - different from current');
           setCurrentSong(newSong);
         } else {
           console.log('🔄 Skipping song change for host - no change detected or state not established');
@@ -207,12 +216,15 @@ const Session = () => {
       socket.on('playbackStateChanged', (newPlayingState) => {
         console.log('🔄 Playback state changed from sync:', newPlayingState);
         console.log('🔄 User is host:', isHostRef.current, 'Current playing state:', isPlayingRef.current);
+        
         // Only hosts should update their playing state from sync events
         // Guests should always have isPlaying: false locally
         if (isHostRef.current && newPlayingState !== isPlayingRef.current) {
+          console.log('🔄 Host applying playback state change');
           setIsPlaying(newPlayingState);
         } else if (!isHostRef.current) {
           // Guests should always have isPlaying: false
+          console.log('🔄 Guest keeping isPlaying: false');
           setIsPlaying(false);
         }
       });
@@ -222,16 +234,25 @@ const Session = () => {
         console.log('🔄 Atomic state change from sync:', stateData);
         console.log('🔄 Changes:', stateData.changes);
         
-        // For hosts, only apply changes if they're actually different to prevent overwrites
+        // Guests should always get atomic updates
+        // Hosts should only get updates if they're different to prevent overwrites
         if (stateData.changes.song) {
-          if (!isHostRef.current || (hostStateEstablishedRef.current && JSON.stringify(stateData.currentSong) !== JSON.stringify(currentSongRef.current))) {
+          if (!isHostRef.current) {
+            console.log('🔄 Guest applying song change in atomic update');
+            setCurrentSong(stateData.currentSong);
+          } else if (hostStateEstablishedRef.current && JSON.stringify(stateData.currentSong) !== JSON.stringify(currentSongRef.current)) {
+            console.log('🔄 Host applying song change in atomic update - different from current');
             setCurrentSong(stateData.currentSong);
           } else {
             console.log('🔄 Skipping song change in atomic update for host - no change detected or state not established');
           }
         }
         if (stateData.changes.queue) {
-          if (!isHostRef.current || (hostStateEstablishedRef.current && JSON.stringify(stateData.queue) !== JSON.stringify(queueRef.current))) {
+          if (!isHostRef.current) {
+            console.log('🔄 Guest applying queue change in atomic update');
+            setQueue(stateData.queue || []);
+          } else if (hostStateEstablishedRef.current && JSON.stringify(stateData.queue) !== JSON.stringify(queueRef.current)) {
+            console.log('🔄 Host applying queue change in atomic update - different from current');
             setQueue(stateData.queue || []);
           } else {
             console.log('🔄 Skipping queue change in atomic update for host - no change detected or state not established');
@@ -240,6 +261,7 @@ const Session = () => {
         if (stateData.changes.playback && isHostRef.current) {
           // Only hosts should update their playing state from sync events
           if (stateData.isPlaying !== isPlayingRef.current) {
+            console.log('🔄 Host applying playback change in atomic update');
             setIsPlaying(stateData.isPlaying);
           } else {
             console.log('🔄 Skipping playback change in atomic update for host - no change detected');
@@ -247,23 +269,16 @@ const Session = () => {
         }
       });
       
-      // For guests: Use a more gentle sync approach that doesn't interfere with host state
+      // For guests: Use a more robust sync approach that keeps them updated
       if (!isHostRef.current) {
         let syncAttempt = 0;
-        const maxSyncAttempts = 3; // Reduced attempts
+        const maxSyncAttempts = 5; // More attempts for better reliability
         const syncTimeouts = [];
-        let hasReceivedRealData = false;
         
         const attemptSync = async () => {
           try {
             syncAttempt++;
-            console.log(`🔄 Guest gentle sync attempt ${syncAttempt}/${maxSyncAttempts}...`);
-            
-            // Only do this if we haven't received real data yet
-            if (hasReceivedRealData) {
-              console.log('✅ Already have real data, skipping sync attempt');
-              return;
-            }
+            console.log(`🔄 Guest sync attempt ${syncAttempt}/${maxSyncAttempts}...`);
             
             const clientId = socket?.getClientId ? socket.getClientId() : null;
             const freshSessionData = await getSession(sessionId, clientId);
@@ -283,7 +298,13 @@ const Session = () => {
               // Guests should always have isPlaying: false locally
               // They don't control playback, only the host does
               setIsPlaying(false);
-              hasReceivedRealData = true;
+              
+              // Continue syncing periodically to stay updated
+              if (syncAttempt < maxSyncAttempts) {
+                console.log(`⏳ Scheduling next sync in ${5000}ms to stay updated...`);
+                const nextTimeout = setTimeout(attemptSync, 5000);
+                syncTimeouts.push(nextTimeout);
+              }
             } else if (syncAttempt < maxSyncAttempts) {
               console.log(`⏳ No real data yet, will retry in ${2000 * syncAttempt}ms...`);
               const nextTimeout = setTimeout(attemptSync, 2000 * syncAttempt);
@@ -292,7 +313,7 @@ const Session = () => {
               console.log('❌ Max sync attempts reached, giving up');
             }
           } catch (err) {
-            console.error('❌ Failed to gentle sync session:', err);
+            console.error('❌ Failed to sync session:', err);
             if (syncAttempt < maxSyncAttempts) {
               console.log(`⏳ Retrying sync in ${2000 * syncAttempt}ms...`);
               const nextTimeout = setTimeout(attemptSync, 2000 * syncAttempt);
@@ -437,6 +458,14 @@ const Session = () => {
   const handleAddToQueue = (song) => {
     console.log('🎵 Adding to queue:', song, 'isHost:', isHost);
     
+    // Only hosts can add songs to the queue
+    if (!isHost) {
+      console.log('❌ Guest attempted to add song to queue - denied');
+      setToastMessage('Only the host can add songs to the queue');
+      setTimeout(() => setToastMessage(''), 2500);
+      return;
+    }
+    
     // Check if we have stored duration for this song
     const songWithDuration = songDurationsRef.current[song.id] 
       ? { ...song, duration: songDurationsRef.current[song.id] }
@@ -446,11 +475,10 @@ const Session = () => {
     setQueue(newQueue);
     
     // Show confirmation toast
-    const userType = isHost ? 'Host' : 'Guest';
-    setToastMessage(`${userType}: "${song.name}" added to queue`);
+    setToastMessage(`Host: "${song.name}" added to queue`);
     setTimeout(() => setToastMessage(''), 2500);
     
-    // Everyone can add to the shared queue, but only host controls playback
+    // Sync updated queue to all clients
     if (socket) {
       console.log('🎵 Syncing updated queue to all clients');
       socket.emit('updateQueue', newQueue);
@@ -459,13 +487,18 @@ const Session = () => {
 
   const handleReorderQueue = (newQueue) => {
     console.log('🔄 Reordering queue:', newQueue);
-    if (isHost) {
-      setQueue(newQueue);
-      
-      // Sync to other devices
-      if (socket) {
-        socket.emit('updateQueue', newQueue);
-      }
+    
+    // Only hosts can reorder the queue
+    if (!isHost) {
+      console.log('❌ Guest attempted to reorder queue - denied');
+      return;
+    }
+    
+    setQueue(newQueue);
+    
+    // Sync to other devices
+    if (socket) {
+      socket.emit('updateQueue', newQueue);
     }
   };
 
@@ -712,7 +745,7 @@ const Session = () => {
       {/* Tab Navigation */}
       <div className="bg-gray-800 border-b border-gray-700">
         <div className="flex">
-          {['player', 'queue', 'browse', 'test'].map((tab) => (
+          {['player', 'queue'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -722,9 +755,35 @@ const Session = () => {
                   : 'text-gray-400 hover:text-white'
               }`}
             >
-              {tab === 'test' ? '🧪 Test' : tab}
+              {tab}
             </button>
           ))}
+          {/* Browse tab only for hosts */}
+          {isHost && (
+            <button
+              onClick={() => setActiveTab('browse')}
+              className={`flex-1 py-3 px-4 text-sm font-medium capitalize ${
+                activeTab === 'browse'
+                  ? 'text-purple-400 border-b-2 border-purple-400'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Browse
+            </button>
+          )}
+          {/* Test tab only for hosts */}
+          {isHost && (
+            <button
+              onClick={() => setActiveTab('test')}
+              className={`flex-1 py-3 px-4 text-sm font-medium ${
+                activeTab === 'test'
+                  ? 'text-purple-400 border-b-2 border-purple-400'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              🧪 Test
+            </button>
+          )}
         </div>
       </div>
 
@@ -794,13 +853,13 @@ const Session = () => {
           />
         )}
         
-        {activeTab === 'browse' && (
+        {activeTab === 'browse' && isHost && (
           <FileBrowser
             onAddToQueue={handleAddToQueue}
           />
         )}
         
-        {activeTab === 'test' && (
+        {activeTab === 'test' && isHost && (
           <AudioTest />
         )}
       </div>
