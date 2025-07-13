@@ -128,7 +128,7 @@ const Session = () => {
           
           // Only hosts should get the playing state from server data
           // Guests should always have isPlaying: false
-          if (isHost) {
+          if (isHostRef.current) {
             setIsPlaying(sessionData.isPlaying);
             // Mark host state as established when using server data
             hostStateEstablishedRef.current = true;
@@ -180,12 +180,12 @@ const Session = () => {
       // Listen for sync events
       socket.on('queueUpdated', (newQueue) => {
         console.log('🔄 Queue updated from sync:', newQueue);
-        console.log('🔄 User is host:', isHost, 'Current queue length:', queue.length);
+        console.log('🔄 User is host:', isHostRef.current, 'Current queue length:', queueRef.current.length);
         console.log('🔄 New queue length:', newQueue?.length || 0);
         
         // Only apply queue updates if we're not the host or if the queue is actually different
         // This prevents hosts from having their state overwritten by guest sync events
-        if (!isHost || (hostStateEstablishedRef.current && JSON.stringify(newQueue) !== JSON.stringify(queue))) {
+        if (!isHostRef.current || (hostStateEstablishedRef.current && JSON.stringify(newQueue) !== JSON.stringify(queueRef.current))) {
           setQueue(newQueue || []);
         } else {
           console.log('🔄 Skipping queue update for host - no change detected or state not established');
@@ -194,10 +194,10 @@ const Session = () => {
       
       socket.on('songChanged', (newSong) => {
         console.log('🔄 Song changed from sync:', newSong);
-        console.log('🔄 User is host:', isHost, 'Current song:', currentSong);
+        console.log('🔄 User is host:', isHostRef.current, 'Current song:', currentSongRef.current);
         
         // Only apply song changes if we're not the host or if the song is actually different
-        if (!isHost || (hostStateEstablishedRef.current && JSON.stringify(newSong) !== JSON.stringify(currentSong))) {
+        if (!isHostRef.current || (hostStateEstablishedRef.current && JSON.stringify(newSong) !== JSON.stringify(currentSongRef.current))) {
           setCurrentSong(newSong);
         } else {
           console.log('🔄 Skipping song change for host - no change detected or state not established');
@@ -206,12 +206,12 @@ const Session = () => {
       
       socket.on('playbackStateChanged', (newPlayingState) => {
         console.log('🔄 Playback state changed from sync:', newPlayingState);
-        console.log('🔄 User is host:', isHost, 'Current playing state:', isPlaying);
+        console.log('🔄 User is host:', isHostRef.current, 'Current playing state:', isPlayingRef.current);
         // Only hosts should update their playing state from sync events
         // Guests should always have isPlaying: false locally
-        if (isHost && newPlayingState !== isPlaying) {
+        if (isHostRef.current && newPlayingState !== isPlayingRef.current) {
           setIsPlaying(newPlayingState);
-        } else if (!isHost) {
+        } else if (!isHostRef.current) {
           // Guests should always have isPlaying: false
           setIsPlaying(false);
         }
@@ -224,22 +224,22 @@ const Session = () => {
         
         // For hosts, only apply changes if they're actually different to prevent overwrites
         if (stateData.changes.song) {
-          if (!isHost || (hostStateEstablishedRef.current && JSON.stringify(stateData.currentSong) !== JSON.stringify(currentSong))) {
+          if (!isHostRef.current || (hostStateEstablishedRef.current && JSON.stringify(stateData.currentSong) !== JSON.stringify(currentSongRef.current))) {
             setCurrentSong(stateData.currentSong);
           } else {
             console.log('🔄 Skipping song change in atomic update for host - no change detected or state not established');
           }
         }
         if (stateData.changes.queue) {
-          if (!isHost || (hostStateEstablishedRef.current && JSON.stringify(stateData.queue) !== JSON.stringify(queue))) {
+          if (!isHostRef.current || (hostStateEstablishedRef.current && JSON.stringify(stateData.queue) !== JSON.stringify(queueRef.current))) {
             setQueue(stateData.queue || []);
           } else {
             console.log('🔄 Skipping queue change in atomic update for host - no change detected or state not established');
           }
         }
-        if (stateData.changes.playback && isHost) {
+        if (stateData.changes.playback && isHostRef.current) {
           // Only hosts should update their playing state from sync events
-          if (stateData.isPlaying !== isPlaying) {
+          if (stateData.isPlaying !== isPlayingRef.current) {
             setIsPlaying(stateData.isPlaying);
           } else {
             console.log('🔄 Skipping playback change in atomic update for host - no change detected');
@@ -248,7 +248,7 @@ const Session = () => {
       });
       
       // For guests: Use a more gentle sync approach that doesn't interfere with host state
-      if (!isHost) {
+      if (!isHostRef.current) {
         let syncAttempt = 0;
         const maxSyncAttempts = 3; // Reduced attempts
         const syncTimeouts = [];
@@ -327,8 +327,7 @@ const Session = () => {
         socket.off('atomicStateChange');
       };
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, isHost]);
+  }, [sessionId, socket]);
 
   // Force republish current state - useful when guests join and might have stale data
   const republishCurrentState = useCallback(() => {
