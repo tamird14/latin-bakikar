@@ -41,6 +41,7 @@ const Session = () => {
   // Ref to track current song for socket comparisons
   const currentSongRef = useRef(null);
   const songDurationsRef = useRef({});
+  const hostStateEstablishedRef = useRef(false);
 
   // Update refs when values change
   useEffect(() => {
@@ -60,9 +61,15 @@ const Session = () => {
         console.log('👥 Initial client count:', sessionData.clientCount);
         setSession(sessionData);
         
-        // For hosts: Check if we have local backup state and backend is empty
-        if (isHost && (!sessionData.currentSong && (!sessionData.queue || sessionData.queue.length === 0))) {
-          console.log('🏠 Host detected empty backend state - checking for local backup...');
+        // For hosts: Only restore from localStorage if this is the first load and backend is truly empty
+        // We need to be more careful about when to restore from backup
+        const isFirstLoad = !currentSong && queue.length === 0 && !isPlaying;
+        const hasBackendContent = sessionData.currentSong || (sessionData.queue && sessionData.queue.length > 0);
+        const hasLocalContent = currentSong || queue.length > 0 || isPlaying;
+        
+        // Only restore if we're truly starting fresh (no local content) and backend is empty
+        if (isHost && isFirstLoad && !hasBackendContent && !hasLocalContent) {
+          console.log('🏠 Host detected empty backend state on first load - checking for local backup...');
           
           // Try to restore from localStorage
           const localBackup = localStorage.getItem(`session_backup_${sessionId}`);
@@ -94,14 +101,15 @@ const Session = () => {
                   socket.emit('updatePlaybackState', backup.isPlaying);
                 }
               }
+              
+              // Mark host state as established after restoration
+              hostStateEstablishedRef.current = true;
             } catch (err) {
               console.error('Failed to parse local backup:', err);
             }
           }
-        }
-        
-        // If no local backup or not a host, use server data
-        if (!isHost || !localStorage.getItem(`session_backup_${sessionId}`)) {
+        } else {
+          // Use server data (either not a host, or not first load, or backend has content)
           setCurrentSong(sessionData.currentSong);
           
           // Apply stored durations to queue items
@@ -116,6 +124,8 @@ const Session = () => {
           // Guests should always have isPlaying: false
           if (isHost) {
             setIsPlaying(sessionData.isPlaying);
+            // Mark host state as established when using server data
+            hostStateEstablishedRef.current = true;
           } else {
             setIsPlaying(false);
           }
@@ -143,7 +153,7 @@ const Session = () => {
     };
 
     loadSession();
-  }, [sessionId, socket, isHost]); // Add isHost dependency
+  }, [sessionId, socket]); // Remove isHost dependency to prevent reloads when guest joins
 
   // Socket connection and sync - only run once per session
   useEffect(() => {
@@ -166,13 +176,26 @@ const Session = () => {
         console.log('🔄 Queue updated from sync:', newQueue);
         console.log('🔄 User is host:', isHost, 'Current queue length:', queue.length);
         console.log('🔄 New queue length:', newQueue?.length || 0);
-        setQueue(newQueue || []);
+        
+        // Only apply queue updates if we're not the host or if the queue is actually different
+        // This prevents hosts from having their state overwritten by guest sync events
+        if (!isHost || (hostStateEstablishedRef.current && JSON.stringify(newQueue) !== JSON.stringify(queue))) {
+          setQueue(newQueue || []);
+        } else {
+          console.log('🔄 Skipping queue update for host - no change detected or state not established');
+        }
       });
       
       socket.on('songChanged', (newSong) => {
         console.log('🔄 Song changed from sync:', newSong);
         console.log('🔄 User is host:', isHost, 'Current song:', currentSong);
-        setCurrentSong(newSong);
+        
+        // Only apply song changes if we're not the host or if the song is actually different
+        if (!isHost || (hostStateEstablishedRef.current && JSON.stringify(newSong) !== JSON.stringify(currentSong))) {
+          setCurrentSong(newSong);
+        } else {
+          console.log('🔄 Skipping song change for host - no change detected or state not established');
+        }
       });
       
       socket.on('playbackStateChanged', (newPlayingState) => {
@@ -180,8 +203,11 @@ const Session = () => {
         console.log('🔄 User is host:', isHost, 'Current playing state:', isPlaying);
         // Only hosts should update their playing state from sync events
         // Guests should always have isPlaying: false locally
-        if (isHost) {
+        if (isHost && newPlayingState !== isPlaying) {
           setIsPlaying(newPlayingState);
+        } else if (!isHost) {
+          // Guests should always have isPlaying: false
+          setIsPlaying(false);
         }
       });
       
@@ -190,15 +216,28 @@ const Session = () => {
         console.log('🔄 Atomic state change from sync:', stateData);
         console.log('🔄 Changes:', stateData.changes);
         
+        // For hosts, only apply changes if they're actually different to prevent overwrites
         if (stateData.changes.song) {
-          setCurrentSong(stateData.currentSong);
+          if (!isHost || (hostStateEstablishedRef.current && JSON.stringify(stateData.currentSong) !== JSON.stringify(currentSong))) {
+            setCurrentSong(stateData.currentSong);
+          } else {
+            console.log('🔄 Skipping song change in atomic update for host - no change detected or state not established');
+          }
         }
         if (stateData.changes.queue) {
-          setQueue(stateData.queue || []);
+          if (!isHost || (hostStateEstablishedRef.current && JSON.stringify(stateData.queue) !== JSON.stringify(queue))) {
+            setQueue(stateData.queue || []);
+          } else {
+            console.log('🔄 Skipping queue change in atomic update for host - no change detected or state not established');
+          }
         }
         if (stateData.changes.playback && isHost) {
           // Only hosts should update their playing state from sync events
-          setIsPlaying(stateData.isPlaying);
+          if (stateData.isPlaying !== isPlaying) {
+            setIsPlaying(stateData.isPlaying);
+          } else {
+            console.log('🔄 Skipping playback change in atomic update for host - no change detected');
+          }
         }
       });
       
@@ -287,7 +326,7 @@ const Session = () => {
 
   // Force republish current state - useful when guests join and might have stale data
   const republishCurrentState = useCallback(() => {
-    if (isHost && socket) {
+    if (isHost && socket && !loading) {
       console.log('📢 Host republishing current state...');
       console.log('📢 Current song:', currentSong);
       console.log('📢 Current queue:', queue);
@@ -304,9 +343,9 @@ const Session = () => {
         socket.emit('atomicUpdate', stateUpdate);
       }
     } else {
-      console.log('📢 Not republishing - isHost:', isHost, 'socket:', !!socket);
+      console.log('📢 Not republishing - isHost:', isHost, 'socket:', !!socket, 'loading:', loading);
     }
-  }, [isHost, socket, currentSong, queue, isPlaying]);
+  }, [isHost, socket, currentSong, queue, isPlaying, loading]);
 
   // Update client count from session data
   useEffect(() => {
@@ -316,8 +355,8 @@ const Session = () => {
       setClientCount(sessionData.clientCount);
       
       // If we're the host and client count increased, republish state for new guests
-      // But only if we have actual content to share
-      if (isHost && previousCount > 0 && sessionData.clientCount > previousCount) {
+      // But only if we have actual content to share and this isn't the initial load
+      if (isHost && previousCount > 0 && sessionData.clientCount > previousCount && !loading) {
         const hasContent = currentSong || (queue && queue.length > 0);
         if (hasContent) {
           console.log('👥 New guest joined, republishing state...');
@@ -328,7 +367,7 @@ const Session = () => {
         }
       }
     }
-  }, [sessionData, clientCount, isHost, republishCurrentState, currentSong, queue]);
+  }, [sessionData, clientCount, isHost, republishCurrentState, currentSong, queue, loading]);
 
   // Update queue items with stored durations when durations change
   useEffect(() => {
@@ -343,7 +382,7 @@ const Session = () => {
     }
   }, [songDurations]);
 
-  // Backup host state to localStorage
+  // Backup host state to localStorage and mark state as established
   useEffect(() => {
     if (isHost && !loading) {
       const backupState = {
@@ -355,6 +394,11 @@ const Session = () => {
       
       console.log('💾 Backing up host state to localStorage:', backupState);
       localStorage.setItem(`session_backup_${sessionId}`, JSON.stringify(backupState));
+      
+      // Mark host state as established when they have content
+      if (currentSong || queue.length > 0 || isPlaying) {
+        hostStateEstablishedRef.current = true;
+      }
     }
   }, [isHost, currentSong, queue, isPlaying, sessionId, loading]);
 
