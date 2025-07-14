@@ -118,12 +118,30 @@ const Session = () => {
           hostStateEstablishedRef.current = true;
           
         } else {
-          // For guests: Load from backend
+          // For guests: Load from backend with retry
           console.log('👥 Guest loading session from backend...');
           const clientId = socket?.getClientId ? socket.getClientId() : null;
-          const sessionData = await getSession(sessionId, clientId);
           
-          console.log('🔄 Guest session data loaded:', sessionData);
+          // Retry loading session for guests (host might still be saving it)
+          let sessionData = null;
+          const maxRetries = 10; // More retries for guests
+          
+          for (let retryCount = 0; retryCount < maxRetries; retryCount++) {
+            try {
+              sessionData = await getSession(sessionId, clientId);
+              console.log('🔄 Guest session data loaded:', sessionData);
+              break; // Success, exit the loop
+            } catch (err) {
+              console.log(`⏳ Guest retry ${retryCount + 1}/${maxRetries} - session not ready yet...`);
+              if (retryCount < maxRetries - 1) {
+                // Wait longer between retries for guests
+                await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+              } else {
+                throw new Error('Session not found after multiple attempts');
+              }
+            }
+          }
+          
           setSession(sessionData);
           setCurrentSong(sessionData.currentSong);
           
