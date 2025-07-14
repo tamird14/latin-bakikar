@@ -58,64 +58,73 @@ const Session = () => {
 
   // Load session data
   useEffect(() => {
-    const loadSession = async (retryCount = 0) => {
+    const loadSession = async () => {
       try {
-        // Get client ID from socket for heartbeat tracking
-        const clientId = socket?.getClientId ? socket.getClientId() : null;
-        const sessionData = await getSession(sessionId, clientId);
-        console.log('🔄 Initial session data loaded:', sessionData);
-        console.log('👥 Initial client count:', sessionData.clientCount);
-        setSession(sessionData);
-        
-        // For hosts: Only restore from localStorage if this is the first load and backend is truly empty
-        // We need to be more careful about when to restore from backup
-        const isFirstLoad = !currentSongRef.current && queueRef.current.length === 0 && !isPlayingRef.current;
-        const hasBackendContent = sessionData.currentSong || (sessionData.queue && sessionData.queue.length > 0);
-        const hasLocalContent = currentSongRef.current || queueRef.current.length > 0 || isPlayingRef.current;
-        
-        // Only restore if we're truly starting fresh (no local content) and backend is empty
-        if (isHostRef.current && isFirstLoad && !hasBackendContent && !hasLocalContent) {
-          console.log('🏠 Host detected empty backend state on first load - checking for local backup...');
+        // For hosts: If this is a newly created session, start with local state
+        if (isHostRef.current) {
+          console.log('🏠 Host loading session - checking if newly created...');
           
-          // Try to restore from localStorage
-          const localBackup = localStorage.getItem(`session_backup_${sessionId}`);
-          if (localBackup) {
-            try {
-              const backup = JSON.parse(localBackup);
-              console.log('🔄 Restoring host state from local backup:', backup);
-              
-              if (backup.currentSong) {
-                setCurrentSong(backup.currentSong);
-                // Immediately sync to backend
-                if (socket) {
-                  socket.emit('updateCurrentSong', backup.currentSong);
+          // Check if this is a newly created session (no backend data yet)
+          const clientId = socket?.getClientId ? socket.getClientId() : null;
+          let sessionData;
+          
+          try {
+            sessionData = await getSession(sessionId, clientId);
+            console.log('🔄 Session exists in backend:', sessionData);
+          } catch (err) {
+            console.log('🆕 New session detected - starting with local state');
+            // This is a new session, start with local state
+            sessionData = {
+              id: sessionId,
+              name: originalSessionNameRef.current || 'Music Session',
+              currentSong: null,
+              queue: [],
+              isPlaying: false,
+              clientCount: 1,
+              lastUpdate: Date.now(),
+              version: 0
+            };
+            
+            // Save session to backend in background
+            setTimeout(async () => {
+              try {
+                console.log('💾 Saving new session to backend...');
+                const response = await fetch(`/api/sessions/${sessionId}`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    action: 'join',
+                    clientId: clientId,
+                    name: sessionData.name
+                  })
+                });
+                if (response.ok) {
+                  console.log('✅ Session saved to backend successfully');
                 }
+              } catch (saveErr) {
+                console.log('⚠️ Failed to save session to backend:', saveErr);
               }
-              
-              if (backup.queue && backup.queue.length > 0) {
-                setQueue(backup.queue);
-                // Immediately sync to backend
-                if (socket) {
-                  socket.emit('updateQueue', backup.queue);
-                }
-              }
-              
-              if (backup.isPlaying !== undefined) {
-                setIsPlaying(backup.isPlaying);
-                // Immediately sync to backend
-                if (socket) {
-                  socket.emit('updatePlaybackState', backup.isPlaying);
-                }
-              }
-              
-              // Mark host state as established after restoration
-              hostStateEstablishedRef.current = true;
-            } catch (err) {
-              console.error('Failed to parse local backup:', err);
-            }
+            }, 1000); // Small delay to ensure UI is ready
           }
+          
+          // Set session data
+          setSession(sessionData);
+          setCurrentSong(sessionData.currentSong);
+          setQueue(sessionData.queue || []);
+          setIsPlaying(sessionData.isPlaying || false);
+          setClientCount(sessionData.clientCount || 1);
+          
+          // Mark host state as established
+          hostStateEstablishedRef.current = true;
+          
         } else {
-          // Use server data (either not a host, or not first load, or backend has content)
+          // For guests: Load from backend
+          console.log('👥 Guest loading session from backend...');
+          const clientId = socket?.getClientId ? socket.getClientId() : null;
+          const sessionData = await getSession(sessionId, clientId);
+          
+          console.log('🔄 Guest session data loaded:', sessionData);
+          setSession(sessionData);
           setCurrentSong(sessionData.currentSong);
           
           // Apply stored durations to queue items
@@ -126,71 +135,23 @@ const Session = () => {
           );
           setQueue(queueWithDurations);
           
-          // Only hosts should get the playing state from server data
           // Guests should always have isPlaying: false
-          if (isHostRef.current) {
-            setIsPlaying(sessionData.isPlaying);
-            // Mark host state as established when using server data
-            hostStateEstablishedRef.current = true;
-          } else {
-            setIsPlaying(false);
-          }
+          setIsPlaying(false);
+          setClientCount(sessionData.clientCount);
         }
         
-        setClientCount(sessionData.clientCount);
+        setLoading(false);
         
         // Store the original session name if this is the first load
         if (sessionData.name && sessionData.name !== 'Music Session') {
           if (!originalSessionNameRef.current) {
             setOriginalSessionName(sessionData.name);
             localStorage.setItem(`session_name_${sessionId}`, sessionData.name);
-          }
-          // Always use the stored original name if available
-          if (originalSessionNameRef.current && sessionData.name === 'Music Session') {
-            sessionData.name = originalSessionNameRef.current;
+            originalSessionNameRef.current = sessionData.name;
           }
         }
-        
-        setLoading(false);
       } catch (err) {
         console.log('❌ Failed to load session:', err.message);
-        
-        // If this is a newly created session (host=true), try to create the session first
-        if (isHostRef.current && retryCount === 0) {
-          console.log('🏠 Host detected missing session, attempting to create it...');
-          try {
-            // Try to create the session by sending an update request
-            const clientId = socket?.getClientId ? socket.getClientId() : null;
-            const response = await fetch(`/api/sessions/${sessionId}`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                action: 'join',
-                clientId: clientId,
-                name: originalSessionNameRef.current || 'Music Session'
-              })
-            });
-            
-            if (response.ok) {
-              console.log('✅ Successfully created session, retrying load...');
-              setTimeout(() => loadSession(retryCount + 1), 100);
-              return;
-            }
-          } catch (createErr) {
-            console.log('❌ Failed to create session:', createErr);
-          }
-        }
-        
-        // If this is a newly created session (host=true), retry a few times
-        // This handles the race condition where session creation and loading happen simultaneously
-        if (isHostRef.current && retryCount < 3) {
-          console.log(`🔄 Retrying session load (attempt ${retryCount + 1}/3)...`);
-          setTimeout(() => loadSession(retryCount + 1), 500 * (retryCount + 1));
-          return;
-        }
-        
         setError('Session not found');
         setLoading(false);
       }
