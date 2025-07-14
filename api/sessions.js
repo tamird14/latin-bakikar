@@ -94,6 +94,9 @@ module.exports = function handler(req, res) {
       }
       
       // Check if session exists in memory first
+      console.log('🔍 Looking for session:', sessionId);
+      console.log('🔍 Total sessions in memory:', sessions.size);
+      console.log('🔍 Available session IDs:', Array.from(sessions.keys()));
       const existingSession = sessions.get(sessionId);
       if (existingSession) {
         console.log('✅ Found existing session in memory:', existingSession.name);
@@ -304,6 +307,8 @@ module.exports = function handler(req, res) {
         
         sessions.set(sessionId, session);
         console.log('✅ Session created successfully:', sessionId, 'with name:', sessionName);
+        console.log('✅ Total sessions in memory:', sessions.size);
+        console.log('✅ Session stored:', sessions.has(sessionId));
         res.json({ sessionId, message: 'Session created successfully' });
       } catch (error) {
         console.error('❌ Error creating session:', error);

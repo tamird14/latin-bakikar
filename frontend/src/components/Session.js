@@ -155,6 +155,34 @@ const Session = () => {
       } catch (err) {
         console.log('❌ Failed to load session:', err.message);
         
+        // If this is a newly created session (host=true), try to create the session first
+        if (isHostRef.current && retryCount === 0) {
+          console.log('🏠 Host detected missing session, attempting to create it...');
+          try {
+            // Try to create the session by sending an update request
+            const clientId = socket?.getClientId ? socket.getClientId() : null;
+            const response = await fetch(`/api/sessions/${sessionId}`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                action: 'join',
+                clientId: clientId,
+                name: originalSessionNameRef.current || 'Music Session'
+              })
+            });
+            
+            if (response.ok) {
+              console.log('✅ Successfully created session, retrying load...');
+              setTimeout(() => loadSession(retryCount + 1), 100);
+              return;
+            }
+          } catch (createErr) {
+            console.log('❌ Failed to create session:', createErr);
+          }
+        }
+        
         // If this is a newly created session (host=true), retry a few times
         // This handles the race condition where session creation and loading happen simultaneously
         if (isHostRef.current && retryCount < 3) {
