@@ -58,7 +58,7 @@ const Session = () => {
 
   // Load session data
   useEffect(() => {
-    const loadSession = async () => {
+    const loadSession = async (retryCount = 0) => {
       try {
         // Get client ID from socket for heartbeat tracking
         const clientId = socket?.getClientId ? socket.getClientId() : null;
@@ -153,6 +153,16 @@ const Session = () => {
         
         setLoading(false);
       } catch (err) {
+        console.log('❌ Failed to load session:', err.message);
+        
+        // If this is a newly created session (host=true), retry a few times
+        // This handles the race condition where session creation and loading happen simultaneously
+        if (isHostRef.current && retryCount < 3) {
+          console.log(`🔄 Retrying session load (attempt ${retryCount + 1}/3)...`);
+          setTimeout(() => loadSession(retryCount + 1), 500 * (retryCount + 1));
+          return;
+        }
+        
         setError('Session not found');
         setLoading(false);
       }
