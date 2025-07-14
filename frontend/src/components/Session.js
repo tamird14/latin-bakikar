@@ -140,16 +140,7 @@ const Session = () => {
           setClientCount(sessionData.clientCount);
         }
         
-        setLoading(false);
-        
-        // Store the original session name if this is the first load
-        if (sessionData.name && sessionData.name !== 'Music Session') {
-          if (!originalSessionNameRef.current) {
-            setOriginalSessionName(sessionData.name);
-            localStorage.setItem(`session_name_${sessionId}`, sessionData.name);
-            originalSessionNameRef.current = sessionData.name;
-          }
-        }
+                setLoading(false);
       } catch (err) {
         console.log('❌ Failed to load session:', err.message);
         setError('Session not found');
@@ -159,6 +150,15 @@ const Session = () => {
 
     loadSession();
   }, [sessionId, socket]); // Using refs for state values to prevent unnecessary re-renders
+
+  // Store session name in a separate effect to avoid dependency issues
+  useEffect(() => {
+    if (session && session.name && session.name !== 'Music Session' && !originalSessionNameRef.current) {
+      originalSessionNameRef.current = session.name;
+      setOriginalSessionName(session.name);
+      localStorage.setItem(`session_name_${sessionId}`, session.name);
+    }
+  }, [session, sessionId]);
 
   // Socket connection and sync - only run once per session
   useEffect(() => {
