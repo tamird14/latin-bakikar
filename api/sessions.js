@@ -148,22 +148,13 @@ module.exports = function handler(req, res) {
         return;
       }
       
-      // If not in memory and no active clients, create a basic session
-      // The frontend should handle preserving the original name
-      const defaultSession = {
-        id: sessionId,
-        name: 'Music Session', // Generic name that frontend can override
-        currentSong: null,
-        queue: [],
-        isPlaying: false,
-        clientCount: clientId ? 1 : 0, // If client ID provided, count it
-        lastUpdate: Date.now(),
-        version: 0,
-        updateId: req.body?.updateId || null
-      };
-      
-      console.log('✅ Returning default session for:', sessionId);
-      res.json(defaultSession);
+      // If not in memory and no active clients, session doesn't exist
+      console.log('❌ Session not found:', sessionId);
+      res.status(404).json({ 
+        error: 'session_not_found', 
+        message: 'Session does not exist',
+        sessionId: sessionId
+      });
       return;
     } catch (error) {
       console.error('❌ Error getting session:', error);
