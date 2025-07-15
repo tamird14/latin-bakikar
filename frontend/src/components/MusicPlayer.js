@@ -98,7 +98,7 @@ const MusicPlayer = ({
       {/* Album Art / Song Info */}
       <div className="text-center mb-6">
         <div className="w-64 h-64 bg-gradient-to-br from-purple-600 to-blue-600 rounded-3xl mx-auto mb-4 flex items-center justify-center shadow-2xl">
-          <span className="text-6xl">🎵</span>
+            <span className="text-6xl">🎵</span>
         </div>
         
         <h2 className="text-xl font-bold mb-1 truncate">{currentSong.name}</h2>
@@ -135,47 +135,47 @@ const MusicPlayer = ({
       {isHost && (
         <>
           <div className="flex items-center justify-center space-x-4 mb-6">
-            <button
+        <button
               onClick={onStop}
               className="w-12 h-12 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center transition-colors"
               title="Stop (restart from beginning)"
             >
               ⏹️
-            </button>
-            
-            <button
-              onClick={() => onPlayPause(currentSong)}
+        </button>
+        
+        <button
+          onClick={() => onPlayPause(currentSong)}
               className="w-16 h-16 bg-purple-600 hover:bg-purple-700 rounded-full flex items-center justify-center text-2xl transition-colors"
               title={isPlaying ? "Pause" : "Play"}
-            >
+        >
               {isPlaying ? '⏸️' : '▶️'}
-            </button>
-            
-            <button
-              onClick={onNext}
+        </button>
+        
+        <button
+          onClick={onNext}
               className="w-12 h-12 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center transition-colors"
               title="Next song"
-            >
-              ⏭️
-            </button>
-          </div>
+        >
+          ⏭️
+        </button>
+      </div>
 
-          {/* Volume Control */}
-          <div className="flex items-center space-x-3">
-            <span className="text-sm">🔊</span>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
+      {/* Volume Control */}
+      <div className="flex items-center space-x-3">
+        <span className="text-sm">🔊</span>
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
               value={volume || 1}
-              onChange={handleVolumeChange}
-              className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
-            />
-            <span className="text-sm text-gray-400 w-8">
+          onChange={handleVolumeChange}
+          className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
+        />
+        <span className="text-sm text-gray-400 w-8">
               {Math.round((volume || 1) * 100)}%
-            </span>
-          </div>
+        </span>
+      </div>
         </>
       )}
 

@@ -208,8 +208,8 @@ const Queue = ({ queue, currentSong, isHost, onReorder }) => {
           sensors={sensors}
           collisionDetection={closestCenter}
           onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-        >
+        onDragEnd={handleDragEnd}
+      >
           <SortableContext 
             items={queue.map(song => song.id)}
             strategy={verticalListSortingStrategy}
@@ -231,26 +231,26 @@ const Queue = ({ queue, currentSong, isHost, onReorder }) => {
           <DragOverlay adjustScale={false}>
             {activeItem && (
               <div className="bg-gray-700 rounded-lg p-4 shadow-2xl border border-gray-600 transform rotate-2 opacity-95">
-                <div className="flex items-center space-x-4">
+                      <div className="flex items-center space-x-4">
                   <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center text-sm font-medium text-gray-300">
                     {queue.findIndex(song => song.id === activeItem.id) + 1}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-white truncate">
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-white truncate">
                       {activeItem.name}
-                    </p>
-                    <p className="text-sm text-gray-400 truncate">
+                          </p>
+                          <p className="text-sm text-gray-400 truncate">
                       {activeItem.artists?.join(', ') || 'Unknown Artist'}
-                    </p>
-                  </div>
-                  <div className="flex items-center space-x-3">
+                          </p>
+                        </div>
+                        <div className="flex items-center space-x-3">
                     <span className="text-sm text-gray-400">
                       {formatDuration(activeItem.duration)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
           </DragOverlay>
         </DndContext>
       ) : (
@@ -260,8 +260,8 @@ const Queue = ({ queue, currentSong, isHost, onReorder }) => {
           </div>
           <p className="text-lg mb-2">No songs queued</p>
           <p className="text-sm">Add songs to continue listening</p>
-        </div>
-      )}
+            </div>
+          )}
 
       {/* Usage Info */}
       {queue.length > 0 && (
@@ -274,8 +274,8 @@ const Queue = ({ queue, currentSong, isHost, onReorder }) => {
           </p>
           {!isHost && (
             <p className="text-sm text-gray-500 text-center mt-2">
-              Only the host can reorder the queue and control playback
-            </p>
+            Only the host can reorder the queue and control playback
+          </p>
           )}
         </div>
       )}

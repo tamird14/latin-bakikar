@@ -920,7 +920,7 @@ const Session = () => {
           />
         )}
         
-        {activeTab === 'browse' && isHost && (
+        {activeTab === 'browse' && (
           <FileBrowser
             onAddToQueue={handleAddToQueue}
           />
