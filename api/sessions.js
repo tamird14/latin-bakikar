@@ -44,8 +44,10 @@ function cleanupStaleClients() {
 setInterval(cleanupStaleClients, 3000);
 
 module.exports = function handler(req, res) {
-  console.log('🔥 API called:', req.method, req.url);
-  console.log('🔥 Request body:', req.body);
+  const instanceId = Math.random().toString(36).substring(2, 8);
+  console.log(`🔥 [${instanceId}] API called:`, req.method, req.url);
+  console.log(`🔥 [${instanceId}] Request body:`, req.body);
+  console.log(`🔥 [${instanceId}] Sessions in memory:`, sessions.size);
   
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -94,9 +96,9 @@ module.exports = function handler(req, res) {
       }
       
       // Check if session exists in memory first
-      console.log('🔍 Looking for session:', sessionId);
-      console.log('🔍 Total sessions in memory:', sessions.size);
-      console.log('🔍 Available session IDs:', Array.from(sessions.keys()));
+      console.log(`🔍 [${instanceId}] Looking for session:`, sessionId);
+      console.log(`🔍 [${instanceId}] Total sessions in memory:`, sessions.size);
+      console.log(`🔍 [${instanceId}] Available session IDs:`, Array.from(sessions.keys()));
       const existingSession = sessions.get(sessionId);
       if (existingSession) {
         console.log('✅ Found existing session in memory:', existingSession.name);
@@ -306,9 +308,9 @@ module.exports = function handler(req, res) {
         };
         
         sessions.set(sessionId, session);
-        console.log('✅ Session created successfully:', sessionId, 'with name:', sessionName);
-        console.log('✅ Total sessions in memory:', sessions.size);
-        console.log('✅ Session stored:', sessions.has(sessionId));
+        console.log(`✅ [${instanceId}] Session created successfully:`, sessionId, 'with name:', sessionName);
+        console.log(`✅ [${instanceId}] Total sessions in memory:`, sessions.size);
+        console.log(`✅ [${instanceId}] Session stored:`, sessions.has(sessionId));
         res.json({ sessionId, message: 'Session created successfully' });
       } catch (error) {
         console.error('❌ Error creating session:', error);
@@ -328,6 +330,7 @@ module.exports = function handler(req, res) {
     }));
     
     res.json({
+      instanceId: instanceId,
       totalSessions: sessions.size,
       activeSessions: activeSessions,
       message: 'Debug: All active sessions'
