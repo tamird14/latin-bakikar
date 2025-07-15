@@ -124,7 +124,7 @@ const Session = () => {
           
           // Retry loading session for guests (host might still be saving it)
           let sessionData = null;
-          const maxRetries = 10; // More retries for guests
+          const maxRetries = 20; // More retries for guests (serverless instances)
           
           for (let retryCount = 0; retryCount < maxRetries; retryCount++) {
             try {
@@ -133,6 +133,29 @@ const Session = () => {
               break; // Success, exit the loop
             } catch (err) {
               console.log(`⏳ Guest retry ${retryCount + 1}/${maxRetries} - session not ready yet...`);
+              
+              // Try to create session if it doesn't exist (for guests)
+              if (retryCount === 0) {
+                try {
+                  console.log('🔄 Guest attempting to create session...');
+                  const response = await fetch(`/api/sessions/${sessionId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      action: 'join',
+                      clientId: clientId,
+                      name: 'Music Session'
+                    })
+                  });
+                  if (response.ok) {
+                    console.log('✅ Guest successfully created session');
+                    continue; // Retry the GET request
+                  }
+                } catch (createErr) {
+                  console.log('⚠️ Guest failed to create session:', createErr);
+                }
+              }
+              
               if (retryCount < maxRetries - 1) {
                 // Wait longer between retries for guests
                 await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
