@@ -134,27 +134,7 @@ const Session = () => {
             } catch (err) {
               console.log(`⏳ Guest retry ${retryCount + 1}/${maxRetries} - session not ready yet...`);
               
-              // Try to create session if it doesn't exist (for guests)
-              if (retryCount === 0) {
-                try {
-                  console.log('🔄 Guest attempting to create session...');
-                  const response = await fetch(`/api/sessions/${sessionId}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      action: 'join',
-                      clientId: clientId,
-                      name: 'Music Session'
-                    })
-                  });
-                  if (response.ok) {
-                    console.log('✅ Guest successfully created session');
-                    continue; // Retry the GET request
-                  }
-                } catch (createErr) {
-                  console.log('⚠️ Guest failed to create session:', createErr);
-                }
-              }
+
               
               if (retryCount < maxRetries - 1) {
                 // Wait longer between retries for guests
