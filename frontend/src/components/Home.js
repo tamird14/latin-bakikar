@@ -109,9 +109,15 @@ const Home = () => {
 
         {/* Footer */}
         <div className="text-center mt-8">
-          <p className="text-white text-opacity-60 text-sm">
+          <p className="text-white text-opacity-60 text-sm mb-4">
             Stream music together with friends in real-time
           </p>
+          <button
+            onClick={() => navigate('/admin')}
+            className="text-white text-opacity-80 hover:text-opacity-100 text-sm underline transition-opacity"
+          >
+            Admin Dashboard
+          </button>
         </div>
       </div>
     </div>
