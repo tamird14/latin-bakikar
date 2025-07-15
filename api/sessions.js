@@ -317,7 +317,21 @@ module.exports = function handler(req, res) {
     }
   } else if (req.method === 'GET') {
     // This is a GET request to /api/sessions (without session ID)
-    res.status(400).json({ error: 'Session ID is required in URL path: /api/sessions/{sessionId}' });
+    // Return debug info about all active sessions
+    const activeSessions = Array.from(sessions.entries()).map(([id, session]) => ({
+      id,
+      name: session.name,
+      clientCount: sessionClients.get(id)?.size || 0,
+      lastUpdate: session.lastUpdate,
+      hasCurrentSong: !!session.currentSong,
+      queueLength: session.queue?.length || 0
+    }));
+    
+    res.json({
+      totalSessions: sessions.size,
+      activeSessions: activeSessions,
+      message: 'Debug: All active sessions'
+    });
   } else {
     res.status(405).json({ error: 'Method not allowed' });
   }
