@@ -407,7 +407,7 @@ export const SocketProvider = ({ children }) => {
       
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [updateSession, pollSession, atomicUpdate, clientId]);
+  }, [updateSession, pollSession, atomicUpdate, sendHeartbeat, clientId]);
 
   const value = {
     socket,
