@@ -8,8 +8,8 @@ const sessionClients = new Map();
 // Store session names persistently using a simpler approach
 // We'll encode the session name in the session updates to preserve it
 
-// Client heartbeat timeout (if no activity for 10 seconds, remove client)
-const CLIENT_TIMEOUT = 10000;
+// Client heartbeat timeout (if no activity for 60 seconds, remove client)
+const CLIENT_TIMEOUT = 60000;
 
 // Simple ID generator (replacing uuid)
 function generateSessionId() {
@@ -40,8 +40,8 @@ function cleanupStaleClients() {
   }
 }
 
-// Run cleanup every 3 seconds
-setInterval(cleanupStaleClients, 3000);
+// Run cleanup every 30 seconds
+setInterval(cleanupStaleClients, 30000);
 
 module.exports = function handler(req, res) {
   const instanceId = Math.random().toString(36).substring(2, 8);
@@ -208,7 +208,7 @@ module.exports = function handler(req, res) {
         // Update session data based on request
         if (req.body.action === 'join') {
           // Handle client joining
-          const clientId = req.body.clientId || `client_${Date.now()}`;
+          const clientId = req.body.clientId || `client_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
           let clients = sessionClients.get(sessionId) || new Map();
           
           // Add or update client timestamp
@@ -326,14 +326,19 @@ module.exports = function handler(req, res) {
   } else if (req.method === 'GET') {
     // This is a GET request to /api/sessions (without session ID)
     // Return debug info about all active sessions
-    const activeSessions = Array.from(sessions.entries()).map(([id, session]) => ({
-      id,
-      name: session.name,
-      clientCount: sessionClients.get(id)?.size || 0,
-      lastUpdate: session.lastUpdate,
-      hasCurrentSong: !!session.currentSong,
-      queueLength: session.queue?.length || 0
-    }));
+    const activeSessions = Array.from(sessions.entries()).map(([id, session]) => {
+      const clients = sessionClients.get(id) || new Map();
+      const clientCount = clients.size;
+      console.log(`📊 [${instanceId}] Session ${id}: ${clientCount} clients`);
+      return {
+        id,
+        name: session.name,
+        clientCount: clientCount,
+        lastUpdate: session.lastUpdate,
+        hasCurrentSong: !!session.currentSong,
+        queueLength: session.queue?.length || 0
+      };
+    });
     
     res.json({
       instanceId: instanceId,

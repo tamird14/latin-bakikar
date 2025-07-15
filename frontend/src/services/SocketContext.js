@@ -36,6 +36,7 @@ export const SocketProvider = ({ children }) => {
   const updateTimeout = useRef(null);
   
   const pollInterval = useRef(null);
+  const heartbeatInterval = useRef(null);
   const currentSessionId = useRef(null);
   const lastUpdate = useRef(0);
   const sessionDataRef = useRef(null);
@@ -45,6 +46,17 @@ export const SocketProvider = ({ children }) => {
     sessionDataRef.current = sessionData;
   }, [sessionData]);
   
+  // Send heartbeat to keep client active
+  const sendHeartbeat = useCallback(async (sessionId) => {
+    try {
+      await fetch(`/api/sessions/${sessionId}?clientId=${encodeURIComponent(clientId)}`, {
+        method: 'GET'
+      });
+    } catch (error) {
+      console.error('Failed to send heartbeat:', error);
+    }
+  }, [clientId]);
+
   const pollSession = useCallback(async (sessionId) => {
     // Don't poll if we're currently updating
     if (isUpdating.current) {
@@ -263,6 +275,10 @@ export const SocketProvider = ({ children }) => {
             if (!pollInterval.current) {
               pollInterval.current = setInterval(() => pollSession(sessionId), 1000);
             }
+            // Start heartbeat to keep client active
+            if (!heartbeatInterval.current) {
+              heartbeatInterval.current = setInterval(() => sendHeartbeat(sessionId), 5000);
+            }
             break;
             
           case 'leaveSession':
@@ -272,6 +288,11 @@ export const SocketProvider = ({ children }) => {
             if (pollInterval.current) {
               clearInterval(pollInterval.current);
               pollInterval.current = null;
+            }
+            // Stop heartbeat
+            if (heartbeatInterval.current) {
+              clearInterval(heartbeatInterval.current);
+              heartbeatInterval.current = null;
             }
             break;
             
@@ -373,6 +394,10 @@ export const SocketProvider = ({ children }) => {
       if (pollInterval.current) {
         clearInterval(pollInterval.current);
         pollInterval.current = null;
+      }
+      if (heartbeatInterval.current) {
+        clearInterval(heartbeatInterval.current);
+        heartbeatInterval.current = null;
       }
       
       // Use the captured ref value for cleanup
