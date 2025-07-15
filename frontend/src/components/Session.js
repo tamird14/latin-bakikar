@@ -25,7 +25,10 @@ const Session = () => {
   const [queue, setQueue] = useState([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [clientCount, setClientCount] = useState(0);
-  const [activeTab, setActiveTab] = useState('player');
+  const [activeTab, setActiveTab] = useState(() => {
+    // Set default tab based on user role
+    return searchParams.get('host') === 'true' ? 'player' : 'browse';
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
@@ -765,51 +768,82 @@ const Session = () => {
       {/* Tab Navigation */}
       <div className="bg-gray-800 border-b border-gray-700">
         <div className="flex">
-          {['player', 'queue'].map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`flex-1 py-3 px-4 text-sm font-medium capitalize ${
-                activeTab === tab
-                  ? 'text-purple-400 border-b-2 border-purple-400'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
-          {/* Browse tab only for hosts */}
-          {isHost && (
-            <button
-              onClick={() => setActiveTab('browse')}
-              className={`flex-1 py-3 px-4 text-sm font-medium capitalize ${
-                activeTab === 'browse'
-                  ? 'text-purple-400 border-b-2 border-purple-400'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              Browse
-            </button>
-          )}
-          {/* Test tab only for hosts */}
-          {isHost && (
-            <button
-              onClick={() => setActiveTab('test')}
-              className={`flex-1 py-3 px-4 text-sm font-medium ${
-                activeTab === 'test'
-                  ? 'text-purple-400 border-b-2 border-purple-400'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              🧪 Test
-            </button>
+          {/* Host sees all tabs, guests only see Browse and Queue */}
+          {isHost ? (
+            // Host tabs: Player, Queue, Browse, Test
+            <>
+              <button
+                onClick={() => setActiveTab('player')}
+                className={`flex-1 py-3 px-4 text-sm font-medium capitalize ${
+                  activeTab === 'player'
+                    ? 'text-purple-400 border-b-2 border-purple-400'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                Player
+              </button>
+              <button
+                onClick={() => setActiveTab('queue')}
+                className={`flex-1 py-3 px-4 text-sm font-medium capitalize ${
+                  activeTab === 'queue'
+                    ? 'text-purple-400 border-b-2 border-purple-400'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                Queue
+              </button>
+              <button
+                onClick={() => setActiveTab('browse')}
+                className={`flex-1 py-3 px-4 text-sm font-medium capitalize ${
+                  activeTab === 'browse'
+                    ? 'text-purple-400 border-b-2 border-purple-400'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                Browse
+              </button>
+              <button
+                onClick={() => setActiveTab('test')}
+                className={`flex-1 py-3 px-4 text-sm font-medium ${
+                  activeTab === 'test'
+                    ? 'text-purple-400 border-b-2 border-purple-400'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                🧪 Test
+              </button>
+            </>
+          ) : (
+            // Guest tabs: Browse, Queue
+            <>
+              <button
+                onClick={() => setActiveTab('browse')}
+                className={`flex-1 py-3 px-4 text-sm font-medium capitalize ${
+                  activeTab === 'browse'
+                    ? 'text-purple-400 border-b-2 border-purple-400'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                Browse
+              </button>
+              <button
+                onClick={() => setActiveTab('queue')}
+                className={`flex-1 py-3 px-4 text-sm font-medium capitalize ${
+                  activeTab === 'queue'
+                    ? 'text-purple-400 border-b-2 border-purple-400'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                Queue
+              </button>
+            </>
           )}
         </div>
       </div>
 
       {/* Content */}
       <div className="flex-1 p-4">
-        {activeTab === 'player' && (
+        {activeTab === 'player' && isHost && (
           <MusicPlayer
             currentSong={currentSong}
             isPlaying={isPlaying}
@@ -825,6 +859,19 @@ const Session = () => {
             onVolumeChange={handleVolumeChange}
             onSeek={handleSeek}
           />
+        )}
+        
+        {/* Redirect guests away from player tab */}
+        {activeTab === 'player' && !isHost && (
+          <div className="text-center py-8">
+            <p className="text-gray-400 mb-4">Only hosts can access the player controls.</p>
+            <button
+              onClick={() => setActiveTab('browse')}
+              className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700"
+            >
+              Go to Browse
+            </button>
+          </div>
         )}
         
         {/* Show audio error across all tabs if present */}
