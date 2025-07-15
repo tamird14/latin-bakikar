@@ -16,16 +16,16 @@ export const createSession = async (name) => {
 };
 
 export const getSession = async (sessionId, clientId = null) => {
-  const params = clientId ? { clientId } : {};
-  const response = await api.get(`/sessions/${sessionId}`, { params });
-  
-  // If the response is not ok (e.g., 404), throw an error
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.message || `Session not found: ${sessionId}`);
+  try {
+    const params = clientId ? { clientId } : {};
+    const response = await api.get(`/sessions/${sessionId}`, { params });
+    return response.data;
+  } catch (error) {
+    if (error.response?.status === 404) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+    throw error;
   }
-  
-  return response.data;
 };
 
 // Google Drive integration

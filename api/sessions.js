@@ -189,6 +189,8 @@ module.exports = function handler(req, res) {
             lastUpdate: Date.now(),
             version: 0
           };
+          sessions.set(sessionId, session);
+          console.log(`✅ [${instanceId}] Created new session:`, sessionId, 'with name:', session.name);
         }
         
         // Check for version conflicts (optimistic locking)
@@ -213,11 +215,12 @@ module.exports = function handler(req, res) {
           if (!clients.has(clientId)) {
             clients.set(clientId, Date.now());
             sessionClients.set(sessionId, clients);
-            console.log('👤 Client joined session:', sessionId, 'Client ID:', clientId, 'Total clients:', clients.size);
+            console.log(`👤 [${instanceId}] Client joined session:`, sessionId, 'Client ID:', clientId, 'Total clients:', clients.size);
+            console.log(`👤 [${instanceId}] Session now exists in memory:`, sessions.has(sessionId));
           } else {
             // Update timestamp for existing client (heartbeat)
             clients.set(clientId, Date.now());
-            console.log('💓 Client heartbeat:', sessionId, 'Client ID:', clientId);
+            console.log(`💓 [${instanceId}] Client heartbeat:`, sessionId, 'Client ID:', clientId);
           }
         }
         
@@ -272,7 +275,7 @@ module.exports = function handler(req, res) {
         
         const clients = sessionClients.get(sessionId) || new Map();
         
-        res.json({
+        const responseData = {
           id: session.id,
           name: session.name,
           currentSong: session.currentSong,
@@ -282,7 +285,10 @@ module.exports = function handler(req, res) {
           lastUpdate: session.lastUpdate,
           version: session.version,
           updateId: req.body.updateId || null
-        });
+        };
+        
+        console.log(`✅ [${instanceId}] Returning session data:`, responseData);
+        res.json(responseData);
       } catch (error) {
         console.error('❌ Error updating session:', error);
         res.status(500).json({ error: 'Failed to update session', details: error.message });
