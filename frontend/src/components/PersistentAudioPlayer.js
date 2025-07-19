@@ -94,6 +94,13 @@ const PersistentAudioPlayer = ({
       if (now - lastPlayAttempt.current > 500) { // Prevent rapid play attempts
         console.log('▶️ Attempting to play audio (ready and paused)');
         lastPlayAttempt.current = now;
+        
+        // Load the audio if it hasn't been loaded yet
+        if (audioRef.current.readyState === 0) {
+          console.log('🔄 Loading audio before playing');
+          audioRef.current.load();
+        }
+        
         audioRef.current.play().then(() => {
           startProgressCheck(); // Start iOS backup check when playing
         }).catch(err => {
@@ -213,7 +220,8 @@ const PersistentAudioPlayer = ({
           audioRef.current.src = streamData.url;
           setCurrentSrc(streamData.url);
           setLastLoadedSongId(currentSongId);
-          audioRef.current.load();
+          // Don't call load() immediately - let the browser handle it when play is requested
+          console.log('Audio source set, waiting for play request');
         } else {
           console.log('Song changed during loading, skipping');
           console.log('Expected:', currentSongId, 'Current:', currentSong?.id);
@@ -465,7 +473,7 @@ const PersistentAudioPlayer = ({
       onPause={() => console.log('⏸️ Audio paused')}
       onSeeking={handleSeeking}
       onSeeked={handleSeeked}
-      preload="metadata"
+      preload="none"
     />
   );
 };
