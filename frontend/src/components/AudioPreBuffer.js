@@ -13,6 +13,9 @@ const AudioPreBuffer = ({
   const [isPreBuffering, setIsPreBuffering] = useState(false);
   const [preBufferError, setPreBufferError] = useState(null);
   
+  // Track which songs have been pre-buffered to avoid duplicate pre-buffering
+  const preBufferedSongsRef = useRef(new Set());
+  
   // Get the next song in queue (first song in queue)
   const getNextSong = () => {
     if (!queue || queue.length === 0) return null;
@@ -32,6 +35,9 @@ const AudioPreBuffer = ({
     
     // Don't pre-buffer if we're already pre-buffering this song
     if (preBufferedSong && preBufferedSong.id === nextSong.id) return false;
+    
+    // Don't pre-buffer if this song has already been pre-buffered
+    if (preBufferedSongsRef.current.has(nextSong.id)) return false;
     
     return true;
   };
@@ -70,6 +76,8 @@ const AudioPreBuffer = ({
     if (preBufferRef.current && preBufferedSong) {
       console.log('✅ Pre-buffer ready for:', preBufferedSong.name);
       setIsPreBuffering(false);
+      // Mark this song as pre-buffered
+      preBufferedSongsRef.current.add(preBufferedSong.id);
       onPreBufferReady?.(preBufferedSong);
     }
   };
@@ -98,6 +106,14 @@ const AudioPreBuffer = ({
       setPreBufferError(null);
     }
   }, [currentSong?.id, queue, isHost]);
+
+  // Clear pre-buffered songs when queue changes significantly
+  useEffect(() => {
+    // Clear pre-buffered songs when queue length changes (songs added/removed)
+    // This ensures we don't keep pre-buffered songs that are no longer in queue
+    preBufferedSongsRef.current.clear();
+    console.log('🔄 Queue changed - cleared pre-buffered songs cache');
+  }, [queue.length]); // Only depend on queue length, not the entire queue object
 
   // Cleanup on unmount
   useEffect(() => {
