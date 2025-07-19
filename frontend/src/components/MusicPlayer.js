@@ -13,9 +13,7 @@ const MusicPlayer = ({
   onNext,
   onStop,
   onVolumeChange,
-  onSeek,
-  isPreBuffering,
-  preBufferedSong
+  onSeek
 }) => {
 
   // Audio is now handled by PersistentAudioPlayer component
@@ -108,17 +106,7 @@ const MusicPlayer = ({
           {currentSong.artists?.join(', ') || 'Unknown Artist'}
         </p>
         
-        {/* Pre-buffering indicator */}
-        {isPreBuffering && preBufferedSong && (
-          <div className="mt-2 p-2 bg-blue-900 bg-opacity-50 border border-blue-600 rounded-lg">
-            <div className="flex items-center space-x-2">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
-              <span className="text-blue-300 text-sm">
-                Pre-buffering: {preBufferedSong.name}
-              </span>
-            </div>
-          </div>
-        )}
+
         
         {error && (
           <p className="text-red-400 text-sm mt-2">{error}</p>

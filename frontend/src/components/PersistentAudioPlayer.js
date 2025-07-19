@@ -50,7 +50,6 @@ const PersistentAudioPlayer = ({
       console.log('🛑 Stop command detected - pausing and resetting to beginning');
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
-      // Ensure we don't try to play after stopping
       setIsReady(prev => {
         if (prev) {
           console.log('🛑 Keeping audio ready but ensuring it stays paused');
@@ -72,7 +71,6 @@ const PersistentAudioPlayer = ({
   useEffect(() => {
     if (audioRef.current && seekTime !== undefined && seekTime !== null) {
       console.log('⏩ Seeking to:', seekTime + 's');
-      // Don't set isSeekingRef here - let the native seeking events handle it
       audioRef.current.currentTime = seekTime;
     }
   }, [seekTime]);
@@ -94,13 +92,6 @@ const PersistentAudioPlayer = ({
       if (now - lastPlayAttempt.current > 500) { // Prevent rapid play attempts
         console.log('▶️ Attempting to play audio (ready and paused)');
         lastPlayAttempt.current = now;
-        
-        // Load the audio if it hasn't been loaded yet
-        if (audioRef.current.readyState === 0) {
-          console.log('🔄 Loading audio before playing');
-          audioRef.current.load();
-        }
-        
         audioRef.current.play().then(() => {
           startProgressCheck(); // Start iOS backup check when playing
         }).catch(err => {
@@ -127,9 +118,6 @@ const PersistentAudioPlayer = ({
 
   // Handle song changes (only when song ID actually changes)
   const [lastLoadedSongId, setLastLoadedSongId] = useState(null);
-  const loadingRef = useRef(false); // Prevent concurrent loading
-  const loadingTimeoutRef = useRef(null); // Timeout for loading
-  const retryCountRef = useRef(0); // Track retry attempts
   
   useEffect(() => {
     if (!currentSong || !audioRef.current) {
@@ -146,7 +134,6 @@ const PersistentAudioPlayer = ({
         setCurrentSrc('');
         setIsReady(false);
         setLastLoadedSongId(null);
-        loadingRef.current = false;
         // Clear any previous errors when successfully clearing audio
         onErrorRef.current?.(null);
       }
@@ -161,29 +148,10 @@ const PersistentAudioPlayer = ({
       return;
     }
 
-    // Prevent concurrent loading
-    if (loadingRef.current) {
-      console.log('Song loading already in progress, skipping:', currentSong.name);
-      return;
-    }
-
     console.log('Loading NEW song:', currentSong.name, 'Previous ID:', lastLoadedSongId, 'New ID:', currentSongId);
 
     const loadSong = async () => {
-      loadingRef.current = true; // Mark as loading
       stopProgressCheck(); // Stop iOS backup check when loading new song
-      retryCountRef.current = 0; // Reset retry count
-      
-      // Set a timeout to prevent infinite loading
-      loadingTimeoutRef.current = setTimeout(() => {
-        if (loadingRef.current) {
-          console.log('⏰ Audio loading timeout - aborting');
-          loadingRef.current = false;
-          onErrorRef.current?.('Audio loading timeout - please try again');
-          setCurrentSrc('');
-          setIsReady(false);
-        }
-      }, 60000); // 60 second timeout (increased from 30)
       
       try {
         // Immediately stop current playback and reset state
@@ -203,11 +171,6 @@ const PersistentAudioPlayer = ({
         // Check if we're still supposed to load this song (component might have unmounted or song changed)
         if (!currentSong || currentSong.id !== currentSongId || !audioRef.current) {
           console.log('Song changed during loading delay, aborting');
-          loadingRef.current = false;
-          if (loadingTimeoutRef.current) {
-            clearTimeout(loadingTimeoutRef.current);
-            loadingTimeoutRef.current = null;
-          }
           return;
         }
         
@@ -220,8 +183,7 @@ const PersistentAudioPlayer = ({
           audioRef.current.src = streamData.url;
           setCurrentSrc(streamData.url);
           setLastLoadedSongId(currentSongId);
-          // Don't call load() immediately - let the browser handle it when play is requested
-          console.log('Audio source set, waiting for play request');
+          audioRef.current.load();
         } else {
           console.log('Song changed during loading, skipping');
           console.log('Expected:', currentSongId, 'Current:', currentSong?.id);
@@ -232,12 +194,6 @@ const PersistentAudioPlayer = ({
         onErrorRef.current?.('Failed to load song: ' + err.message);
         setCurrentSrc('');
         setIsReady(false);
-      } finally {
-        loadingRef.current = false; // Always clear loading flag
-        if (loadingTimeoutRef.current) {
-          clearTimeout(loadingTimeoutRef.current);
-          loadingTimeoutRef.current = null;
-        }
       }
     };
 
@@ -245,14 +201,7 @@ const PersistentAudioPlayer = ({
 
     // Cleanup function to handle component unmount or song change
     return () => {
-      if (loadingRef.current) {
-        console.log('Cancelling in-progress song load due to cleanup');
-        loadingRef.current = false;
-      }
-      if (loadingTimeoutRef.current) {
-        clearTimeout(loadingTimeoutRef.current);
-        loadingTimeoutRef.current = null;
-      }
+      // No cleanup needed for this simple version
     };
   }, [currentSong?.id]); // Only depend on song ID
 
@@ -277,85 +226,24 @@ const PersistentAudioPlayer = ({
     
     setIsReady(true);
     onErrorRef.current?.(null); // Clear any previous errors
-    
-    // Clear loading state since audio is ready
-    if (loadingRef.current) {
-      console.log('Audio loaded successfully, clearing loading state');
-      loadingRef.current = false;
-      if (loadingTimeoutRef.current) {
-        clearTimeout(loadingTimeoutRef.current);
-        loadingTimeoutRef.current = null;
-      }
-    }
-    
     // Don't auto-play here, let the useEffect handle it
   };
 
   const handleError = (e) => {
-    console.error('Audio error:', e);
-    
     // Don't report "empty src" errors when we have no current song (expected when queue ends)
     if (!currentSongRef.current && e.target?.error?.message?.includes('Empty src')) {
       console.log('Audio empty src error when no current song (expected after queue ends)');
       return;
     }
     
-    // Add a small delay before showing errors to allow for normal loading
-    setTimeout(() => {
-      // Check if audio is actually playing now (might have recovered)
-      if (audioRef.current && !audioRef.current.paused && audioRef.current.currentTime > 0) {
-        console.log('Audio recovered after error, not showing error message');
-        return;
-      }
-      
-      // Provide more specific error messages based on error type
-      let errorMessage = 'Failed to load audio file';
-      
-      if (e.target?.error) {
-        const error = e.target.error;
-        console.log('Audio error details:', error);
-        
-        switch (error.code) {
-          case MediaError.MEDIA_ERR_ABORTED:
-            errorMessage = 'Audio loading was aborted';
-            break;
-          case MediaError.MEDIA_ERR_NETWORK:
-            errorMessage = 'Network error while loading audio';
-            break;
-          case MediaError.MEDIA_ERR_DECODE:
-            errorMessage = 'Audio format not supported or corrupted file';
-            break;
-          case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
-            // Try to get more specific information about the unsupported format
-            const fileName = currentSongRef.current?.name || '';
-            const fileExtension = fileName.toLowerCase().split('.').pop();
-            
-            if (fileExtension) {
-              errorMessage = `Audio format .${fileExtension} not supported by browser`;
-            } else {
-              errorMessage = 'Audio format not supported by browser';
-            }
-            break;
-          default:
-            errorMessage = `Audio error: ${error.message || 'Unknown error'}`;
-        }
-      }
-      
-      console.log('Setting error message:', errorMessage);
-      onErrorRef.current?.(errorMessage);
-      setCurrentSrc('');
-      setIsReady(false);
-      
-      // Clear loading state if there was an error
-      if (loadingRef.current) {
-        console.log('Clearing loading state due to error');
-        loadingRef.current = false;
-        if (loadingTimeoutRef.current) {
-          clearTimeout(loadingTimeoutRef.current);
-          loadingTimeoutRef.current = null;
-        }
-      }
-    }, 1000); // 1 second delay to allow for recovery
+    console.error('Audio error:', e);
+    const errorMessage = e.target?.error ? 
+      `Audio error: ${e.target.error.message || 'Unknown error'}` : 
+      'Failed to load audio file';
+    
+    onErrorRef.current?.(errorMessage);
+    setCurrentSrc('');
+    setIsReady(false);
   };
 
   const handleTimeUpdate = () => {
@@ -473,7 +361,7 @@ const PersistentAudioPlayer = ({
       onPause={() => console.log('⏸️ Audio paused')}
       onSeeking={handleSeeking}
       onSeeked={handleSeeked}
-      preload="none"
+      preload="metadata"
     />
   );
 };

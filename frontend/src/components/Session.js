@@ -6,7 +6,7 @@ import MusicPlayer from './MusicPlayer';
 import Queue from './Queue';
 import FileBrowser from './FileBrowser';
 import PersistentAudioPlayer from './PersistentAudioPlayer';
-import AudioPreBuffer from './AudioPreBuffer';
+
 import AudioTest from './AudioTest';
 
 const Session = () => {
@@ -42,9 +42,7 @@ const Session = () => {
   const [toastMessage, setToastMessage] = useState('');
   const [songDurations, setSongDurations] = useState({}); // Store durations for songs
   
-  // Pre-buffering state
-  const [preBufferedSong, setPreBufferedSong] = useState(null);
-  const [isPreBuffering, setIsPreBuffering] = useState(false);
+
   
   // Ref to track current song for socket comparisons
   const currentSongRef = useRef(null);
@@ -695,19 +693,7 @@ const Session = () => {
     setTimeout(() => setSeekTime(null), 100);
   };
 
-  // Pre-buffering handlers
-  const handlePreBufferReady = (song) => {
-    console.log('✅ Pre-buffer ready for:', song.name);
-    setPreBufferedSong(song);
-    setIsPreBuffering(false);
-  };
 
-  const handlePreBufferError = (error) => {
-    console.log('❌ Pre-buffer error:', error);
-    setPreBufferedSong(null);
-    setIsPreBuffering(false);
-    // Don't show error to user as pre-buffering is optional
-  };
 
   const resetAudio = () => {
     setCurrentTime(0);
@@ -760,14 +746,7 @@ const Session = () => {
         onError={handleAudioError}
       />
 
-      {/* Audio Pre-Buffer - for seamless song transitions */}
-      <AudioPreBuffer
-        currentSong={currentSong}
-        queue={queue}
-        isHost={isHost}
-        onPreBufferReady={handlePreBufferReady}
-        onPreBufferError={handlePreBufferError}
-      />
+
 
       {/* Header */}
       <div className="bg-gray-800 border-b border-gray-700 p-4">
@@ -894,8 +873,6 @@ const Session = () => {
             onStop={handleStop}
             onVolumeChange={handleVolumeChange}
             onSeek={handleSeek}
-            isPreBuffering={isPreBuffering}
-            preBufferedSong={preBufferedSong}
           />
         )}
         
@@ -955,8 +932,6 @@ const Session = () => {
             currentSong={currentSong}
             isHost={isHost}
             onReorder={handleReorderQueue}
-            isPreBuffering={isPreBuffering}
-            preBufferedSong={preBufferedSong}
           />
         )}
         
