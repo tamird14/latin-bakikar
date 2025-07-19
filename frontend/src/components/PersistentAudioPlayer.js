@@ -300,7 +300,6 @@ const PersistentAudioPlayer = ({
           break;
         case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
           // Try to get more specific information about the unsupported format
-          const currentSrc = audioRef.current?.src || '';
           const fileName = currentSongRef.current?.name || '';
           const fileExtension = fileName.toLowerCase().split('.').pop();
           
