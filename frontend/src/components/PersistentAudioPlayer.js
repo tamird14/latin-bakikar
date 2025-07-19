@@ -174,7 +174,7 @@ const PersistentAudioPlayer = ({
           setCurrentSrc('');
           setIsReady(false);
         }
-      }, 30000); // 30 second timeout
+      }, 60000); // 60 second timeout (increased from 30)
       
       try {
         // Immediately stop current playback and reset state
@@ -271,19 +271,13 @@ const PersistentAudioPlayer = ({
   };
 
   const handleError = (e) => {
-    // Don't report errors if we're currently loading a new song (prevents false errors during transitions)
-    if (loadingRef.current) {
-      console.log('Audio error during loading (expected during song transitions):', e);
-      return;
-    }
+    console.error('Audio error:', e);
     
     // Don't report "empty src" errors when we have no current song (expected when queue ends)
     if (!currentSongRef.current && e.target?.error?.message?.includes('Empty src')) {
       console.log('Audio empty src error when no current song (expected after queue ends)');
       return;
     }
-    
-    console.error('Audio error:', e);
     
     // Provide more specific error messages based on error type
     let errorMessage = 'Failed to load audio file';
@@ -314,6 +308,16 @@ const PersistentAudioPlayer = ({
     onErrorRef.current?.(errorMessage);
     setCurrentSrc('');
     setIsReady(false);
+    
+    // Clear loading state if there was an error
+    if (loadingRef.current) {
+      console.log('Clearing loading state due to error');
+      loadingRef.current = false;
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = null;
+      }
+    }
   };
 
   const handleTimeUpdate = () => {
