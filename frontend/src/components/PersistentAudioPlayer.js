@@ -122,6 +122,7 @@ const PersistentAudioPlayer = ({
   const [lastLoadedSongId, setLastLoadedSongId] = useState(null);
   const loadingRef = useRef(false); // Prevent concurrent loading
   const loadingTimeoutRef = useRef(null); // Timeout for loading
+  const retryCountRef = useRef(0); // Track retry attempts
   
   useEffect(() => {
     if (!currentSong || !audioRef.current) {
@@ -164,6 +165,7 @@ const PersistentAudioPlayer = ({
     const loadSong = async () => {
       loadingRef.current = true; // Mark as loading
       stopProgressCheck(); // Stop iOS backup check when loading new song
+      retryCountRef.current = 0; // Reset retry count
       
       // Set a timeout to prevent infinite loading
       loadingTimeoutRef.current = setTimeout(() => {
@@ -297,7 +299,16 @@ const PersistentAudioPlayer = ({
           errorMessage = 'Audio format not supported or corrupted file';
           break;
         case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
-          errorMessage = 'Audio format not supported by browser';
+          // Try to get more specific information about the unsupported format
+          const currentSrc = audioRef.current?.src || '';
+          const fileName = currentSongRef.current?.name || '';
+          const fileExtension = fileName.toLowerCase().split('.').pop();
+          
+          if (fileExtension) {
+            errorMessage = `Audio format .${fileExtension} not supported by browser`;
+          } else {
+            errorMessage = 'Audio format not supported by browser';
+          }
           break;
         default:
           errorMessage = `Audio error: ${error.message || 'Unknown error'}`;

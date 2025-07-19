@@ -49,7 +49,31 @@ module.exports = async function handler(req, res) {
       
       // Set proper headers for audio streaming
       res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Content-Type', file.mimeType || 'audio/mpeg');
+      
+      // Detect and set proper MIME type based on file extension
+      let contentType = file.mimeType || 'audio/mpeg';
+      const fileName = file.name || '';
+      const fileExtension = fileName.toLowerCase().split('.').pop();
+      
+      // Map file extensions to proper MIME types
+      const mimeTypeMap = {
+        'mp3': 'audio/mpeg',
+        'wav': 'audio/wav',
+        'm4a': 'audio/mp4',
+        'aac': 'audio/aac',
+        'ogg': 'audio/ogg',
+        'flac': 'audio/flac',
+        'wma': 'audio/x-ms-wma'
+      };
+      
+      if (mimeTypeMap[fileExtension]) {
+        contentType = mimeTypeMap[fileExtension];
+        console.log(`🎵 Mapped ${fileExtension} to ${contentType}`);
+      } else {
+        console.log(`🎵 Using original MIME type: ${contentType}`);
+      }
+      
+      res.setHeader('Content-Type', contentType);
       res.setHeader('Accept-Ranges', 'bytes');
       
       if (range && file.size) {
