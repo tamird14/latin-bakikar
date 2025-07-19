@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { getStreamUrl } from '../services/api';
 
 const AudioPreBuffer = ({ 
@@ -10,6 +10,7 @@ const AudioPreBuffer = ({
 }) => {
   const preBufferRef = useRef(null);
   const [preBufferedSong, setPreBufferedSong] = useState(null);
+  // Note: isPreBuffering and preBufferError are used internally for state management
   const [isPreBuffering, setIsPreBuffering] = useState(false);
   const [preBufferError, setPreBufferError] = useState(null);
   
@@ -17,13 +18,13 @@ const AudioPreBuffer = ({
   const preBufferedSongsRef = useRef(new Set());
   
   // Get the next song in queue (first song in queue)
-  const getNextSong = () => {
+  const getNextSong = useCallback(() => {
     if (!queue || queue.length === 0) return null;
     return queue[0];
-  };
+  }, [queue]);
 
   // Check if we should pre-buffer
-  const shouldPreBuffer = () => {
+  const shouldPreBuffer = useCallback(() => {
     // Only pre-buffer if we're a host and there's a current song playing
     if (!isHost || !currentSong) return false;
     
@@ -40,10 +41,10 @@ const AudioPreBuffer = ({
     if (preBufferedSongsRef.current.has(nextSong.id)) return false;
     
     return true;
-  };
+  }, [isHost, currentSong, preBufferedSong, getNextSong]);
 
   // Pre-buffer the next song
-  const preBufferNextSong = async () => {
+  const preBufferNextSong = useCallback(async () => {
     const nextSong = getNextSong();
     if (!nextSong || !preBufferRef.current) return;
 
@@ -69,7 +70,7 @@ const AudioPreBuffer = ({
       onPreBufferError?.(`Failed to pre-buffer ${nextSong.name}: ${error.message}`);
       setIsPreBuffering(false);
     }
-  };
+  }, [getNextSong, onPreBufferError]);
 
   // Handle pre-buffer audio events
   const handlePreBufferCanPlay = () => {
@@ -97,15 +98,16 @@ const AudioPreBuffer = ({
       preBufferNextSong();
     } else {
       // Clear pre-buffer if conditions aren't met
-      if (preBufferRef.current) {
-        preBufferRef.current.src = '';
-        preBufferRef.current.load();
+      const audioElement = preBufferRef.current;
+      if (audioElement) {
+        audioElement.src = '';
+        audioElement.load();
       }
       setPreBufferedSong(null);
       setIsPreBuffering(false);
       setPreBufferError(null);
     }
-  }, [currentSong?.id, queue, isHost]);
+  }, [currentSong?.id, queue, isHost, getNextSong, preBufferNextSong, shouldPreBuffer]);
 
   // Track the first song in queue to detect when it changes
   const firstSongRef = useRef(null);
@@ -123,14 +125,15 @@ const AudioPreBuffer = ({
       }
       firstSongRef.current = firstSongId;
     }
-  }, [queue]); // Depend on the entire queue to detect first song changes
+  }, [queue, getNextSong]); // Depend on the entire queue to detect first song changes
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (preBufferRef.current) {
-        preBufferRef.current.src = '';
-        preBufferRef.current.load();
+      const audioElement = preBufferRef.current;
+      if (audioElement) {
+        audioElement.src = '';
+        audioElement.load();
       }
     };
   }, []);
