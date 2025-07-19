@@ -26,7 +26,9 @@ const SortableQueueItem = ({
   index, 
   isHost, 
   formatDuration,
-  isDragging 
+  isDragging,
+  isPreBuffering,
+  isFirstInQueue
 }) => {
   const {
     attributes,
@@ -56,7 +58,7 @@ const SortableQueueItem = ({
     >
       <div className="flex items-center space-x-4">
         {/* Drag Handle */}
-        {isHost && (
+        {isHost && !isFirstInQueue && (
           <div
             {...attributes}
             {...listeners}
@@ -65,6 +67,22 @@ const SortableQueueItem = ({
           >
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
               <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path>
+            </svg>
+          </div>
+        )}
+        
+        {/* Pre-buffering indicator for first song */}
+        {isFirstInQueue && isPreBuffering && (
+          <div className="text-blue-400 p-2 -m-2">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
+          </div>
+        )}
+        
+        {/* Lock icon for first song when not pre-buffering */}
+        {isFirstInQueue && !isPreBuffering && (
+          <div className="text-gray-500 p-2 -m-2">
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
             </svg>
           </div>
         )}
@@ -100,7 +118,7 @@ const SortableQueueItem = ({
   );
 };
 
-const Queue = ({ queue, currentSong, isHost, onReorder }) => {
+const Queue = ({ queue, currentSong, isHost, onReorder, isPreBuffering, preBufferedSong }) => {
   const [activeId, setActiveId] = useState(null);
   const [activeItem, setActiveItem] = useState(null);
   
@@ -133,6 +151,14 @@ const Queue = ({ queue, currentSong, isHost, onReorder }) => {
     if (active.id !== over?.id && isHost) {
       const oldIndex = queue.findIndex(item => item.id === active.id);
       const newIndex = queue.findIndex(item => item.id === over.id);
+      
+      // Prevent moving the first song (next song to be played)
+      if (oldIndex === 0) {
+        console.log('❌ Cannot reorder first song in queue');
+        setActiveId(null);
+        setActiveItem(null);
+        return;
+      }
       
       if (oldIndex !== -1 && newIndex !== -1) {
         const newQueue = arrayMove(queue, oldIndex, newIndex);
@@ -224,6 +250,8 @@ const Queue = ({ queue, currentSong, isHost, onReorder }) => {
                   isHost={isHost}
                   formatDuration={formatDuration}
                   isDragging={activeId === song.id}
+                  isPreBuffering={isPreBuffering && index === 0}
+                  isFirstInQueue={index === 0}
                 />
               ))}
             </div>
