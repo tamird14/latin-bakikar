@@ -59,8 +59,23 @@ export const searchMusicFiles = async (query, folderId = null) => {
 };
 
 export const getStreamUrl = async (fileId) => {
-  const response = await api.get(`/drive/stream/${fileId}`);
-  return response.data;
+  try {
+    console.log('🎵 Requesting stream URL for file:', fileId);
+    const response = await api.get(`/drive/stream/${fileId}`);
+    console.log('🎵 Stream URL response:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('❌ Failed to get stream URL:', error);
+    if (error.response?.status === 404) {
+      throw new Error(`File not found: ${fileId}`);
+    } else if (error.response?.status === 500) {
+      throw new Error(`Server error: ${error.response.data?.error || 'Unknown server error'}`);
+    } else if (error.code === 'NETWORK_ERROR') {
+      throw new Error('Network error - please check your connection');
+    } else {
+      throw new Error(`Failed to get stream URL: ${error.message}`);
+    }
+  }
 };
 
 export const getFolderPath = async (folderId) => {

@@ -121,6 +121,7 @@ const PersistentAudioPlayer = ({
   // Handle song changes (only when song ID actually changes)
   const [lastLoadedSongId, setLastLoadedSongId] = useState(null);
   const loadingRef = useRef(false); // Prevent concurrent loading
+  const loadingTimeoutRef = useRef(null); // Timeout for loading
   
   useEffect(() => {
     if (!currentSong || !audioRef.current) {
@@ -164,6 +165,17 @@ const PersistentAudioPlayer = ({
       loadingRef.current = true; // Mark as loading
       stopProgressCheck(); // Stop iOS backup check when loading new song
       
+      // Set a timeout to prevent infinite loading
+      loadingTimeoutRef.current = setTimeout(() => {
+        if (loadingRef.current) {
+          console.log('⏰ Audio loading timeout - aborting');
+          loadingRef.current = false;
+          onErrorRef.current?.('Audio loading timeout - please try again');
+          setCurrentSrc('');
+          setIsReady(false);
+        }
+      }, 30000); // 30 second timeout
+      
       try {
         // Immediately stop current playback and reset state
         if (audioRef.current) {
@@ -183,6 +195,10 @@ const PersistentAudioPlayer = ({
         if (!currentSong || currentSong.id !== currentSongId || !audioRef.current) {
           console.log('Song changed during loading delay, aborting');
           loadingRef.current = false;
+          if (loadingTimeoutRef.current) {
+            clearTimeout(loadingTimeoutRef.current);
+            loadingTimeoutRef.current = null;
+          }
           return;
         }
         
@@ -208,6 +224,10 @@ const PersistentAudioPlayer = ({
         setIsReady(false);
       } finally {
         loadingRef.current = false; // Always clear loading flag
+        if (loadingTimeoutRef.current) {
+          clearTimeout(loadingTimeoutRef.current);
+          loadingTimeoutRef.current = null;
+        }
       }
     };
 
@@ -218,6 +238,10 @@ const PersistentAudioPlayer = ({
       if (loadingRef.current) {
         console.log('Cancelling in-progress song load due to cleanup');
         loadingRef.current = false;
+      }
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = null;
       }
     };
   }, [currentSong?.id]); // Only depend on song ID
@@ -260,10 +284,33 @@ const PersistentAudioPlayer = ({
     }
     
     console.error('Audio error:', e);
-    const errorMessage = e.target?.error ? 
-      `Audio error: ${e.target.error.message || 'Unknown error'}` : 
-      'Failed to load audio file';
     
+    // Provide more specific error messages based on error type
+    let errorMessage = 'Failed to load audio file';
+    
+    if (e.target?.error) {
+      const error = e.target.error;
+      console.log('Audio error details:', error);
+      
+      switch (error.code) {
+        case MediaError.MEDIA_ERR_ABORTED:
+          errorMessage = 'Audio loading was aborted';
+          break;
+        case MediaError.MEDIA_ERR_NETWORK:
+          errorMessage = 'Network error while loading audio';
+          break;
+        case MediaError.MEDIA_ERR_DECODE:
+          errorMessage = 'Audio format not supported or corrupted file';
+          break;
+        case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+          errorMessage = 'Audio format not supported by browser';
+          break;
+        default:
+          errorMessage = `Audio error: ${error.message || 'Unknown error'}`;
+      }
+    }
+    
+    console.log('Setting error message:', errorMessage);
     onErrorRef.current?.(errorMessage);
     setCurrentSrc('');
     setIsReady(false);
