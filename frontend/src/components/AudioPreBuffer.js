@@ -107,13 +107,23 @@ const AudioPreBuffer = ({
     }
   }, [currentSong?.id, queue, isHost]);
 
-  // Clear pre-buffered songs when queue changes significantly
+  // Track the first song in queue to detect when it changes
+  const firstSongRef = useRef(null);
+  
+  // Clear pre-buffered songs when the first song in queue changes
   useEffect(() => {
-    // Clear pre-buffered songs when queue length changes (songs added/removed)
-    // This ensures we don't keep pre-buffered songs that are no longer in queue
-    preBufferedSongsRef.current.clear();
-    console.log('🔄 Queue changed - cleared pre-buffered songs cache');
-  }, [queue.length]); // Only depend on queue length, not the entire queue object
+    const firstSong = getNextSong();
+    const firstSongId = firstSong?.id;
+    
+    // If the first song has changed, clear the cache
+    if (firstSongId !== firstSongRef.current) {
+      if (firstSongRef.current) {
+        console.log('🔄 First song in queue changed - cleared pre-buffered songs cache');
+        preBufferedSongsRef.current.clear();
+      }
+      firstSongRef.current = firstSongId;
+    }
+  }, [queue]); // Depend on the entire queue to detect first song changes
 
   // Cleanup on unmount
   useEffect(() => {
