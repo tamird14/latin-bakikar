@@ -269,6 +269,17 @@ const PersistentAudioPlayer = ({
     
     setIsReady(true);
     onErrorRef.current?.(null); // Clear any previous errors
+    
+    // Clear loading state since audio is ready
+    if (loadingRef.current) {
+      console.log('Audio loaded successfully, clearing loading state');
+      loadingRef.current = false;
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = null;
+      }
+    }
+    
     // Don't auto-play here, let the useEffect handle it
   };
 
@@ -281,53 +292,62 @@ const PersistentAudioPlayer = ({
       return;
     }
     
-    // Provide more specific error messages based on error type
-    let errorMessage = 'Failed to load audio file';
-    
-    if (e.target?.error) {
-      const error = e.target.error;
-      console.log('Audio error details:', error);
+    // Add a small delay before showing errors to allow for normal loading
+    setTimeout(() => {
+      // Check if audio is actually playing now (might have recovered)
+      if (audioRef.current && !audioRef.current.paused && audioRef.current.currentTime > 0) {
+        console.log('Audio recovered after error, not showing error message');
+        return;
+      }
       
-      switch (error.code) {
-        case MediaError.MEDIA_ERR_ABORTED:
-          errorMessage = 'Audio loading was aborted';
-          break;
-        case MediaError.MEDIA_ERR_NETWORK:
-          errorMessage = 'Network error while loading audio';
-          break;
-        case MediaError.MEDIA_ERR_DECODE:
-          errorMessage = 'Audio format not supported or corrupted file';
-          break;
-        case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
-          // Try to get more specific information about the unsupported format
-          const fileName = currentSongRef.current?.name || '';
-          const fileExtension = fileName.toLowerCase().split('.').pop();
-          
-          if (fileExtension) {
-            errorMessage = `Audio format .${fileExtension} not supported by browser`;
-          } else {
-            errorMessage = 'Audio format not supported by browser';
-          }
-          break;
-        default:
-          errorMessage = `Audio error: ${error.message || 'Unknown error'}`;
+      // Provide more specific error messages based on error type
+      let errorMessage = 'Failed to load audio file';
+      
+      if (e.target?.error) {
+        const error = e.target.error;
+        console.log('Audio error details:', error);
+        
+        switch (error.code) {
+          case MediaError.MEDIA_ERR_ABORTED:
+            errorMessage = 'Audio loading was aborted';
+            break;
+          case MediaError.MEDIA_ERR_NETWORK:
+            errorMessage = 'Network error while loading audio';
+            break;
+          case MediaError.MEDIA_ERR_DECODE:
+            errorMessage = 'Audio format not supported or corrupted file';
+            break;
+          case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+            // Try to get more specific information about the unsupported format
+            const fileName = currentSongRef.current?.name || '';
+            const fileExtension = fileName.toLowerCase().split('.').pop();
+            
+            if (fileExtension) {
+              errorMessage = `Audio format .${fileExtension} not supported by browser`;
+            } else {
+              errorMessage = 'Audio format not supported by browser';
+            }
+            break;
+          default:
+            errorMessage = `Audio error: ${error.message || 'Unknown error'}`;
+        }
       }
-    }
-    
-    console.log('Setting error message:', errorMessage);
-    onErrorRef.current?.(errorMessage);
-    setCurrentSrc('');
-    setIsReady(false);
-    
-    // Clear loading state if there was an error
-    if (loadingRef.current) {
-      console.log('Clearing loading state due to error');
-      loadingRef.current = false;
-      if (loadingTimeoutRef.current) {
-        clearTimeout(loadingTimeoutRef.current);
-        loadingTimeoutRef.current = null;
+      
+      console.log('Setting error message:', errorMessage);
+      onErrorRef.current?.(errorMessage);
+      setCurrentSrc('');
+      setIsReady(false);
+      
+      // Clear loading state if there was an error
+      if (loadingRef.current) {
+        console.log('Clearing loading state due to error');
+        loadingRef.current = false;
+        if (loadingTimeoutRef.current) {
+          clearTimeout(loadingTimeoutRef.current);
+          loadingTimeoutRef.current = null;
+        }
       }
-    }
+    }, 1000); // 1 second delay to allow for recovery
   };
 
   const handleTimeUpdate = () => {
@@ -437,7 +457,11 @@ const PersistentAudioPlayer = ({
       onError={handleError}
       onTimeUpdate={handleTimeUpdate}
       onEnded={handleEnded}
-      onPlaying={() => console.log('▶️ Audio started playing')}
+      onPlaying={() => {
+        console.log('▶️ Audio started playing');
+        // Clear any error messages when audio actually starts playing
+        onErrorRef.current?.(null);
+      }}
       onPause={() => console.log('⏸️ Audio paused')}
       onSeeking={handleSeeking}
       onSeeked={handleSeeked}
