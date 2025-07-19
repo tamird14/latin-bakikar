@@ -10,9 +10,6 @@ const AudioPreBuffer = ({
 }) => {
   const preBufferRef = useRef(null);
   const [preBufferedSong, setPreBufferedSong] = useState(null);
-  // Note: isPreBuffering and preBufferError are used internally for state management
-  const [isPreBuffering, setIsPreBuffering] = useState(false);
-  const [preBufferError, setPreBufferError] = useState(null);
   
   // Track which songs have been pre-buffered to avoid duplicate pre-buffering
   const preBufferedSongsRef = useRef(new Set());
@@ -49,8 +46,6 @@ const AudioPreBuffer = ({
     if (!nextSong || !preBufferRef.current) return;
 
     console.log('🎵 Pre-buffering next song:', nextSong.name);
-    setIsPreBuffering(true);
-    setPreBufferError(null);
 
     try {
       // Get the stream URL for the next song
@@ -66,9 +61,7 @@ const AudioPreBuffer = ({
       
     } catch (error) {
       console.error('❌ Pre-buffer failed:', error);
-      setPreBufferError(`Failed to pre-buffer: ${error.message}`);
       onPreBufferError?.(`Failed to pre-buffer ${nextSong.name}: ${error.message}`);
-      setIsPreBuffering(false);
     }
   }, [getNextSong, onPreBufferError]);
 
@@ -76,7 +69,6 @@ const AudioPreBuffer = ({
   const handlePreBufferCanPlay = () => {
     if (preBufferRef.current && preBufferedSong) {
       console.log('✅ Pre-buffer ready for:', preBufferedSong.name);
-      setIsPreBuffering(false);
       // Mark this song as pre-buffered
       preBufferedSongsRef.current.add(preBufferedSong.id);
       onPreBufferReady?.(preBufferedSong);
@@ -85,8 +77,6 @@ const AudioPreBuffer = ({
 
   const handlePreBufferError = (e) => {
     console.error('❌ Pre-buffer audio error:', e);
-    setPreBufferError('Pre-buffer failed to load');
-    setIsPreBuffering(false);
     onPreBufferError?.('Pre-buffer failed to load');
   };
 
@@ -104,8 +94,6 @@ const AudioPreBuffer = ({
         audioElement.load();
       }
       setPreBufferedSong(null);
-      setIsPreBuffering(false);
-      setPreBufferError(null);
     }
   }, [currentSong?.id, queue, isHost, getNextSong, preBufferNextSong, shouldPreBuffer]);
 
@@ -129,8 +117,8 @@ const AudioPreBuffer = ({
 
   // Cleanup on unmount
   useEffect(() => {
+    const audioElement = preBufferRef.current;
     return () => {
-      const audioElement = preBufferRef.current;
       if (audioElement) {
         audioElement.src = '';
         audioElement.load();
