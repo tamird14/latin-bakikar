@@ -12,9 +12,11 @@ const PersistentAudioPlayer = ({
   onError,
   currentTime,
   volume,
-  seekTime
+  seekTime,
+  queue // Add queue prop for pre-buffering
 }) => {
   const audioRef = useRef(null);
+  const hiddenAudioRef = useRef(null); // Hidden audio for pre-buffering
   const [currentSrc, setCurrentSrc] = useState('');
   const [isReady, setIsReady] = useState(false);
   const lastPlayAttempt = useRef(0);
@@ -33,6 +35,7 @@ const PersistentAudioPlayer = ({
   const onNextRef = useRef(onNext);
   const onTimeUpdateRef = useRef(onTimeUpdate);
   const onDurationChangeRef = useRef(onDurationChange);
+  const queueRef = useRef(queue);
   
   // Update refs when props change
   useEffect(() => {
@@ -42,7 +45,51 @@ const PersistentAudioPlayer = ({
     onNextRef.current = onNext;
     onTimeUpdateRef.current = onTimeUpdate;
     onDurationChangeRef.current = onDurationChange;
+    queueRef.current = queue;
   });
+
+  // Simple pre-buffering: when a song starts playing, pre-buffer the next song
+  useEffect(() => {
+    if (!isPlaying || !currentSong || !queue || queue.length === 0) {
+      // Clean up hidden audio if no next song
+      if (hiddenAudioRef.current) {
+        hiddenAudioRef.current.src = '';
+        hiddenAudioRef.current = null;
+      }
+      return;
+    }
+
+    // Get the next song from queue
+    const nextSong = queue[0];
+    if (!nextSong || nextSong.id === currentSong.id) {
+      return; // No next song or same song
+    }
+
+    // Pre-buffer the next song silently
+    const preBufferNextSong = async () => {
+      try {
+        console.log('🎵 Pre-buffering next song:', nextSong.name);
+        const streamData = await getStreamUrl(nextSong.id);
+        
+        // Create hidden audio element and start loading
+        hiddenAudioRef.current = new Audio(streamData.url);
+        hiddenAudioRef.current.preload = 'auto';
+        
+        // Don't handle errors - if pre-buffering fails, it's invisible to user
+        hiddenAudioRef.current.onerror = () => {
+          console.log('Pre-buffering failed for:', nextSong.name, '(this is OK)');
+          hiddenAudioRef.current = null;
+        };
+        
+        console.log('✅ Pre-buffering started for:', nextSong.name);
+      } catch (err) {
+        console.log('Pre-buffering failed:', err.message, '(this is OK)');
+        hiddenAudioRef.current = null;
+      }
+    };
+
+    preBufferNextSong();
+  }, [isPlaying, currentSong?.id, queue]);
 
   // Handle stop command (when currentTime is reset to 0)
   useEffect(() => {

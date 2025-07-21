@@ -740,6 +740,7 @@ const Session = () => {
         currentTime={currentTime}
         volume={volume}
         seekTime={seekTime}
+        queue={queue}
         onNext={handleNextSong}
         onTimeUpdate={handleTimeUpdate}
         onDurationChange={handleDurationChange}
