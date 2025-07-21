@@ -24,6 +24,7 @@ const PersistentAudioPlayer = ({
   const progressCheckInterval = useRef(null);
   const lastKnownTime = useRef(0);
   const lastKnownDuration = useRef(0);
+  const errorTimeoutRef = useRef(null); // Timeout for error reporting
   
   // Detect iOS
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
@@ -248,7 +249,11 @@ const PersistentAudioPlayer = ({
 
     // Cleanup function to handle component unmount or song change
     return () => {
-      // No cleanup needed for this simple version
+      // Clear any pending error timeout
+      if (errorTimeoutRef.current) {
+        clearTimeout(errorTimeoutRef.current);
+        errorTimeoutRef.current = null;
+      }
     };
   }, [currentSong?.id]); // Only depend on song ID
 
@@ -262,6 +267,12 @@ const PersistentAudioPlayer = ({
 
   const handleCanPlay = () => {
     console.log('Audio can play - ready to stream');
+    
+    // Clear any pending error timeout since audio is now ready
+    if (errorTimeoutRef.current) {
+      clearTimeout(errorTimeoutRef.current);
+      errorTimeoutRef.current = null;
+    }
     
     // Don't pause if we're currently seeking - seeking should preserve playback state
     if (audioRef.current && !audioRef.current.paused && !isSeekingRef.current) {
@@ -283,12 +294,42 @@ const PersistentAudioPlayer = ({
       return;
     }
     
+    // Clear any existing error timeout
+    if (errorTimeoutRef.current) {
+      clearTimeout(errorTimeoutRef.current);
+      errorTimeoutRef.current = null;
+    }
+    
+    // Don't report certain error types that are common during streaming setup
+    const errorMessage = e.target?.error?.message || '';
+    if (errorMessage.includes('NotSupportedError') || 
+        errorMessage.includes('NetworkError') ||
+        errorMessage.includes('MediaError')) {
+      console.log('Audio streaming error - giving stream time to establish:', errorMessage);
+      
+      // Only report error after 3 seconds if still not working
+      errorTimeoutRef.current = setTimeout(() => {
+        if (!isReady) {
+          console.error('Audio still not ready after timeout - reporting error');
+          const finalErrorMessage = e.target?.error ? 
+            `Audio error: ${e.target.error.message || 'Unknown error'}` : 
+            'Failed to load audio file';
+          
+          onErrorRef.current?.(finalErrorMessage);
+          setCurrentSrc('');
+          setIsReady(false);
+        }
+      }, 3000);
+      
+      return;
+    }
+    
     console.error('Audio error:', e);
-    const errorMessage = e.target?.error ? 
+    const finalErrorMessage = e.target?.error ? 
       `Audio error: ${e.target.error.message || 'Unknown error'}` : 
       'Failed to load audio file';
     
-    onErrorRef.current?.(errorMessage);
+    onErrorRef.current?.(finalErrorMessage);
     setCurrentSrc('');
     setIsReady(false);
   };
