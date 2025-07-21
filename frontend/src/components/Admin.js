@@ -5,6 +5,7 @@ const Admin = () => {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [clearingSessions, setClearingSessions] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -34,6 +35,34 @@ const Admin = () => {
 
   const handleJoinSession = (sessionId) => {
     navigate(`/session/${sessionId}`);
+  };
+
+  const handleClearAllSessions = async () => {
+    if (!window.confirm('Are you sure you want to close and delete ALL active sessions? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      setClearingSessions(true);
+      const response = await fetch('/api/sessions', {
+        method: 'DELETE',
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Cleared all sessions:', result);
+        setSessions([]); // Clear the sessions list
+        alert(`Successfully cleared ${result.clearedSessions} sessions and ${result.clearedClients} clients.`);
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to clear sessions');
+      }
+    } catch (err) {
+      console.error('Error clearing sessions:', err);
+      alert('Failed to clear sessions: ' + err.message);
+    } finally {
+      setClearingSessions(false);
+    }
   };
 
   const formatTime = (timestamp) => {
@@ -75,12 +104,27 @@ const Admin = () => {
       <div className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl font-bold text-gray-800">Admin Dashboard</h1>
-          <button 
-            onClick={() => navigate('/')}
-            className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
-          >
-            ← Back to Home
-          </button>
+          <div className="flex items-center space-x-3">
+            {sessions.length > 0 && (
+              <button 
+                onClick={handleClearAllSessions}
+                disabled={clearingSessions}
+                className={`px-4 py-2 rounded font-medium transition-colors ${
+                  clearingSessions 
+                    ? 'bg-gray-400 text-gray-600 cursor-not-allowed' 
+                    : 'bg-red-600 text-white hover:bg-red-700'
+                }`}
+              >
+                {clearingSessions ? 'Clearing...' : '🗑️ Close All Sessions'}
+              </button>
+            )}
+            <button 
+              onClick={() => navigate('/')}
+              className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+            >
+              ← Back to Home
+            </button>
+          </div>
         </div>
 
         <div className="bg-white rounded-lg shadow-lg p-6">

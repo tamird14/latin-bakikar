@@ -51,7 +51,7 @@ module.exports = function handler(req, res) {
   
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, text/plain');
 
   if (req.method === 'OPTIONS') {
@@ -346,6 +346,28 @@ module.exports = function handler(req, res) {
       activeSessions: activeSessions,
       message: 'Debug: All active sessions'
     });
+  } else if (req.method === 'DELETE') {
+    // Handle DELETE /api/sessions - Clear all sessions
+    try {
+      const sessionCount = sessions.size;
+      const clientCount = Array.from(sessionClients.values()).reduce((total, clients) => total + clients.size, 0);
+      
+      // Clear all sessions and clients
+      sessions.clear();
+      sessionClients.clear();
+      
+      console.log(`🗑️ [${instanceId}] Cleared all sessions: ${sessionCount} sessions, ${clientCount} clients`);
+      
+      res.json({
+        success: true,
+        message: `Cleared all sessions`,
+        clearedSessions: sessionCount,
+        clearedClients: clientCount
+      });
+    } catch (error) {
+      console.error('❌ Error clearing sessions:', error);
+      res.status(500).json({ error: 'Failed to clear sessions', details: error.message });
+    }
   } else {
     res.status(405).json({ error: 'Method not allowed' });
   }
