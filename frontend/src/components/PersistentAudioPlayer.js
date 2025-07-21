@@ -25,6 +25,7 @@ const PersistentAudioPlayer = ({
   const lastKnownTime = useRef(0);
   const lastKnownDuration = useRef(0);
   const errorTimeoutRef = useRef(null); // Timeout for error reporting
+  const isLoadingRef = useRef(false); // Track if we're in initial loading phase
   
   // Detect iOS
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
@@ -212,6 +213,7 @@ const PersistentAudioPlayer = ({
         setIsReady(false); // Reset ready state
         setCurrentSrc(''); // Clear current source
         onErrorRef.current?.(null); // Clear previous errors
+        isLoadingRef.current = true; // Mark as loading
         
         // Small delay to ensure audio element is fully reset
         await new Promise(resolve => setTimeout(resolve, 50));
@@ -219,6 +221,7 @@ const PersistentAudioPlayer = ({
         // Check if we're still supposed to load this song (component might have unmounted or song changed)
         if (!currentSong || currentSong.id !== currentSongId || !audioRef.current) {
           console.log('Song changed during loading delay, aborting');
+          isLoadingRef.current = false;
           return;
         }
         
@@ -235,6 +238,7 @@ const PersistentAudioPlayer = ({
         } else {
           console.log('Song changed during loading, skipping');
           console.log('Expected:', currentSongId, 'Current:', currentSong?.id);
+          isLoadingRef.current = false;
         }
         
       } catch (err) {
@@ -242,6 +246,7 @@ const PersistentAudioPlayer = ({
         onErrorRef.current?.('Failed to load song: ' + err.message);
         setCurrentSrc('');
         setIsReady(false);
+        isLoadingRef.current = false;
       }
     };
 
@@ -254,6 +259,8 @@ const PersistentAudioPlayer = ({
         clearTimeout(errorTimeoutRef.current);
         errorTimeoutRef.current = null;
       }
+      // Reset loading flag
+      isLoadingRef.current = false;
     };
   }, [currentSong?.id]); // Only depend on song ID
 
@@ -273,6 +280,9 @@ const PersistentAudioPlayer = ({
       clearTimeout(errorTimeoutRef.current);
       errorTimeoutRef.current = null;
     }
+    
+    // Mark as no longer loading
+    isLoadingRef.current = false;
     
     // Don't pause if we're currently seeking - seeking should preserve playback state
     if (audioRef.current && !audioRef.current.paused && !isSeekingRef.current) {
@@ -300,17 +310,14 @@ const PersistentAudioPlayer = ({
       errorTimeoutRef.current = null;
     }
     
-    // Don't report certain error types that are common during streaming setup
-    const errorMessage = e.target?.error?.message || '';
-    if (errorMessage.includes('NotSupportedError') || 
-        errorMessage.includes('NetworkError') ||
-        errorMessage.includes('MediaError')) {
-      console.log('Audio streaming error - giving stream time to establish:', errorMessage);
+    // Completely suppress all errors during initial loading phase
+    if (!isReady || isLoadingRef.current) {
+      console.log('Audio error during initial loading - completely ignoring:', e.target?.error?.message);
       
-      // Only report error after 3 seconds if still not working
+      // Only report error after 5 seconds if still not working
       errorTimeoutRef.current = setTimeout(() => {
         if (!isReady) {
-          console.error('Audio still not ready after timeout - reporting error');
+          console.error('Audio still not ready after 5 seconds - reporting error');
           const finalErrorMessage = e.target?.error ? 
             `Audio error: ${e.target.error.message || 'Unknown error'}` : 
             'Failed to load audio file';
@@ -319,12 +326,13 @@ const PersistentAudioPlayer = ({
           setCurrentSrc('');
           setIsReady(false);
         }
-      }, 3000);
+      }, 5000);
       
       return;
     }
     
-    console.error('Audio error:', e);
+    // Only report errors if audio was previously ready and now fails
+    console.error('Audio error after being ready:', e);
     const finalErrorMessage = e.target?.error ? 
       `Audio error: ${e.target.error.message || 'Unknown error'}` : 
       'Failed to load audio file';
