@@ -732,7 +732,7 @@ const Session = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
+    <div className="min-h-screen bg-gray-900 text-white session-container">
       {/* Persistent Audio Player - always rendered */}
       <PersistentAudioPlayer
         currentSong={currentSong}
@@ -750,7 +750,7 @@ const Session = () => {
 
 
       {/* Header */}
-      <div className="bg-gray-800 border-b border-gray-700 p-4">
+      <div className="bg-gray-800 border-b border-gray-700 p-4 session-header">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold">{originalSessionName || session?.name}</h1>
@@ -783,7 +783,7 @@ const Session = () => {
 
       {/* Tab Navigation */}
       <div className="bg-gray-800 border-b border-gray-700">
-        <div className="flex">
+        <div className="flex tab-container tab-navigation">
           {/* Host sees all tabs, guests only see Browse and Queue */}
           {isHost ? (
             // Host tabs: Player, Queue, Browse, Test
