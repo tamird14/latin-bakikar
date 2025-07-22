@@ -140,15 +140,20 @@ const Session = () => {
             } catch (err) {
               console.log(`⏳ Guest retry ${retryCount + 1}/${maxRetries} - session not ready yet...`);
               
-
-              
               if (retryCount < maxRetries - 1) {
                 // Wait longer between retries for guests
                 await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
               } else {
-                throw new Error('Session not found after multiple attempts');
+                // Session truly doesn't exist after all retries
+                console.log('❌ Session does not exist after all retries');
+                throw new Error('Session not found - this session does not exist');
               }
             }
+          }
+          
+          // Only proceed if we have valid session data
+          if (!sessionData) {
+            throw new Error('Session not found - no valid session data');
           }
           
           setSession(sessionData);

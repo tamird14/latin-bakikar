@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createSession } from '../services/api';
+import { createSession, getSession } from '../services/api';
 
 const Home = () => {
   const [sessionName, setSessionName] = useState('');
   const [joinSessionId, setJoinSessionId] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
@@ -28,12 +29,25 @@ const Home = () => {
     }
   };
 
-  const handleJoinSession = () => {
+  const handleJoinSession = async () => {
     if (!joinSessionId.trim()) {
       setError('Please enter a session ID');
       return;
     }
-    navigate(`/session/${joinSessionId}`);
+
+    setIsJoining(true);
+    setError('');
+    const sessionId = joinSessionId.trim();
+
+    try {
+      // Check if session exists before navigating
+      await getSession(sessionId);
+      navigate(`/session/${sessionId}`);
+    } catch (err) {
+      setError('Session not found. Please check the session ID and try again.');
+    } finally {
+      setIsJoining(false);
+    }
   };
 
   return (
@@ -99,9 +113,10 @@ const Home = () => {
               />
               <button
                 onClick={handleJoinSession}
-                className="w-full bg-transparent hover:bg-white hover:bg-opacity-10 border-2 border-white border-opacity-50 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200"
+                disabled={isJoining}
+                className="w-full bg-transparent hover:bg-white hover:bg-opacity-10 border-2 border-white border-opacity-50 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 disabled:bg-opacity-10 disabled:cursor-not-allowed"
               >
-                Join Session
+                {isJoining ? 'Checking...' : 'Join Session'}
               </button>
             </div>
           </div>
