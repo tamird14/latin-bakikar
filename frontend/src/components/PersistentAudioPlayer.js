@@ -136,10 +136,10 @@ const PersistentAudioPlayer = ({
       currentTime
     });
 
-    if (isPlaying && isReady && audioRef.current.paused && audioRef.current.src) {
+    if (isPlaying && audioRef.current.paused && audioRef.current.src) {
       const now = Date.now();
       if (now - lastPlayAttempt.current > 500) { // Prevent rapid play attempts
-        console.log('▶️ Attempting to play audio (ready and paused)');
+        console.log('▶️ Attempting to play audio (user wants to play)');
         lastPlayAttempt.current = now;
         audioRef.current.play().then(() => {
           startProgressCheck(); // Start iOS backup check when playing
@@ -154,11 +154,11 @@ const PersistentAudioPlayer = ({
       console.log('⏸️ Pausing audio via state change');
       audioRef.current.pause();
       stopProgressCheck(); // Stop iOS backup check when pausing
-    } else if (isPlaying && isReady && !audioRef.current.paused) {
+    } else if (isPlaying && !audioRef.current.paused) {
       console.log('✅ Audio already playing, no action needed');
       startProgressCheck(); // Ensure iOS backup check is running
-    } else if (isPlaying && !isReady) {
-      console.log('⏳ Audio not ready yet, waiting...');
+    } else if (isPlaying && audioRef.current.paused) {
+      console.log('⏳ User wants to play but audio is paused - waiting for canplay event');
     } else if (!isPlaying && audioRef.current.paused) {
       console.log('✅ Audio already paused, no action needed');
       stopProgressCheck(); // Ensure iOS backup check is stopped
@@ -284,10 +284,15 @@ const PersistentAudioPlayer = ({
     // Mark as no longer loading
     isLoadingRef.current = false;
     
-    // Don't pause if we're currently seeking - seeking should preserve playback state
+    // Allow progressive streaming - don't pause if user wants to play
     if (audioRef.current && !audioRef.current.paused && !isSeekingRef.current) {
-      console.log('Pausing audio that started playing automatically');
-      audioRef.current.pause();
+      if (isPlayingRef.current) {
+        console.log('✅ Progressive streaming - audio started playing automatically and user wants to play');
+        // Let it continue playing - this is what we want for progressive streaming
+      } else {
+        console.log('⏸️ Pausing audio that started playing automatically (user doesn\'t want to play)');
+        audioRef.current.pause();
+      }
     } else if (isSeekingRef.current) {
       console.log('Audio ready during seek operation - preserving playback state');
     }
@@ -475,6 +480,20 @@ const PersistentAudioPlayer = ({
       onLoadStart={() => console.log('🔄 Audio load started')}
       onLoadedMetadata={handleLoadedMetadata}
       onCanPlay={handleCanPlay}
+      onCanPlayThrough={() => console.log('🎵 Audio can play through entire file')}
+      onProgress={() => {
+        if (audioRef.current) {
+          const buffered = audioRef.current.buffered;
+          if (buffered.length > 0) {
+            const bufferedEnd = buffered.end(buffered.length - 1);
+            const duration = audioRef.current.duration || 0;
+            if (duration > 0) {
+              const bufferedPercent = (bufferedEnd / duration) * 100;
+              console.log(`📊 Buffering progress: ${bufferedPercent.toFixed(1)}%`);
+            }
+          }
+        }
+      }}
       onError={handleError}
       onTimeUpdate={handleTimeUpdate}
       onEnded={handleEnded}
