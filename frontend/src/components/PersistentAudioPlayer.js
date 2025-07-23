@@ -298,6 +298,14 @@ const PersistentAudioPlayer = ({
   };
 
   const handleError = (e) => {
+    console.log('🎵 Audio error triggered:', {
+      error: e.target?.error?.message,
+      isReady,
+      isLoading: isLoadingRef.current,
+      hasCurrentSong: !!currentSongRef.current,
+      currentSong: currentSongRef.current?.name
+    });
+    
     // Don't report "empty src" errors when we have no current song (expected when queue ends)
     if (!currentSongRef.current && e.target?.error?.message?.includes('Empty src')) {
       console.log('Audio empty src error when no current song (expected after queue ends)');
@@ -327,6 +335,27 @@ const PersistentAudioPlayer = ({
           setIsReady(false);
         }
       }, 5000);
+      
+      return;
+    }
+    
+    // Additional protection: if we have a current song but audio isn't ready, suppress errors
+    if (currentSongRef.current && !isReady) {
+      console.log('Audio error while song exists but not ready - suppressing:', e.target?.error?.message);
+      
+      // Only report error after 3 seconds if still not working
+      errorTimeoutRef.current = setTimeout(() => {
+        if (!isReady) {
+          console.error('Audio still not ready after 3 seconds - reporting error');
+          const finalErrorMessage = e.target?.error ? 
+            `Audio error: ${e.target.error.message || 'Unknown error'}` : 
+            'Failed to load audio file';
+          
+          onErrorRef.current?.(finalErrorMessage);
+          setCurrentSrc('');
+          setIsReady(false);
+        }
+      }, 3000);
       
       return;
     }
